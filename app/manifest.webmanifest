@@ -1,0 +1,41 @@
+{
+  "id": "./",
+  "name": "Concours — Adaptive Study v3.20.0",
+  "short_name": "Adaptive Study",
+  "description": "Révision adaptative du concours — 22 PDF recertifiés, synthèses détaillées, flashcards structurées et 4 400 questions reconstruites.",
+  "start_url": "./index.html?build=3180final",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": [
+    "standalone",
+    "minimal-ui"
+  ],
+  "background_color": "#0b1016",
+  "theme_color": "#0b1016",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "./icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "prefer_related_applications": false,
+  "categories": [
+    "education",
+    "medical"
+  ]
+}
