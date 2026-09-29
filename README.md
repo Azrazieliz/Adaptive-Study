@@ -10,10 +10,10 @@ Depuis l'archive privée `AdaptiveStudy_Originaux_623_2026-09-28.zip` conservée
 
 ```bash
 python3 tools/restore_private_bundle.py /chemin/vers/AdaptiveStudy_Originaux_623_2026-09-28.zip
-python3 -m http.server 8765 --directory app
+python3 -m http.server 8765 --directory local_instance/app
 ```
 
-Ouvrir `http://127.0.0.1:8765/`. Sur Android avec Termux, exécuter `bash START_ADAPTIVE_STUDY.sh` après restauration. Ne pas publier les fichiers restaurés : ils sont ignorés par Git.
+Ouvrir `http://127.0.0.1:8765/`. Sur Android avec Termux, exécuter `bash START_ADAPTIVE_STUDY.sh` après restauration. Les fichiers privés sont placés dans `local_instance/`, ignoré par Git.
 
 Le paquet privé donne accès à 623 unités originales sous forme de pages de sujet et de corrigé (549 QCM et 74 QROC). Ces unités ne sont pas transcrites et notées automatiquement. Les anciens QCM et flashcards générés sont désactivés. Les dossiers d'exercices de physique et de biochimie demandent encore une intégration complète avec leurs documents et corrigés.
 
