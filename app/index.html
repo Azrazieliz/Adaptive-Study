@@ -1,0 +1,105 @@
+<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#0b1016"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><link rel="apple-touch-icon" href="./apple-touch-icon.png"><link rel="manifest" href="./manifest.webmanifest"><link rel="stylesheet" href="./styles.css"><title>Concours Adaptive Study v3.20.0</title>
+<style>
+#installPanel{position:fixed;z-index:120;left:10px;right:10px;bottom:78px;max-width:620px;margin:auto;
+background:#162132;border:1px solid #3b5271;border-radius:14px;padding:11px;box-shadow:0 12px 32px rgba(0,0,0,.35)}
+#installPanel .rowi{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+#installPanel .growi{flex:1;min-width:180px}
+#installPanel button{min-height:40px;border:1px solid #8eafff;border-radius:10px;padding:7px 11px;background:#8eafff;color:#08101d;font-weight:800}
+#installPanel button.secondary{background:transparent;color:#dfe7f4;border-color:#465a73}
+#installStatus{font-size:11px;color:#a9b4c3;margin-top:4px}
+@media (display-mode: standalone){#installPanel{display:none!important}}
+</style>
+
+<script>
+window.__ADAPTIVE_LAST_ERROR='';
+window.addEventListener('error', function(e){
+  window.__ADAPTIVE_LAST_ERROR=(e&&e.message)?e.message:'erreur inconnue';
+  try{
+    let x=document.getElementById('bootError');
+    if(!x){
+      x=document.createElement('div');x.id='bootError';
+      x.style.cssText='position:fixed;z-index:9999;left:8px;right:8px;top:8px;padding:10px;background:#5a2025;color:white;border:1px solid #ff9ba2;border-radius:10px;font:12px system-ui';
+      document.body.appendChild(x);
+    }
+    x.textContent='Erreur de démarrage : '+(e.message||'erreur inconnue')+'. Recharge la page après avoir remplacé le dossier de l’application.';
+  }catch(_){}
+});
+</script>
+</head><body>
+<header class="app-header"><div class="header-inner"><div class="brand"><div class="brand-title">Concours — Adaptive Study v3.20.0</div><div class="brand-sub">7 matières · QE et annales originaux · corrigés PDF</div></div><span class="header-chip">v3.20.0</span></div></header>
+<main class="shell"><section id="home" class="view active"><div id="homeContent"></div></section><section id="quiz" class="view"><div id="quizContent"></div></section><section id="cards" class="view"><div id="cardsContent"></div></section><section id="course" class="view"><div id="courseContent"></div></section><section id="more" class="view"><div id="moreContent"></div></section></main>
+<nav class="bottom-nav"><button class="active" data-main="home"><span class="ico">⌂</span><span>Accueil</span></button><button data-main="quiz"><span class="ico">Q</span><span>Quiz</span></button><button data-main="cards"><span class="ico">▤</span><span>Flashcards</span></button><button data-main="course"><span class="ico">≡</span><span>Cours</span></button><button data-main="more"><span class="ico">•••</span><span>Plus</span></button></nav><div id="toast" class="toast hidden"></div>
+<div id="installPanel">
+  <div class="rowi">
+    <div class="growi">
+      <b>Installer Adaptive Study</b>
+      <div id="installStatus">Préparation du mode hors ligne…</div>
+    </div>
+    <button id="installBtn">Installer</button>
+    <button id="hideInstall" class="secondary">Masquer</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  let deferredPrompt=null;
+  const p=document.getElementById('installPanel');
+  const b=document.getElementById('installBtn');
+  const s=document.getElementById('installStatus');
+  const h=document.getElementById('hideInstall');
+  if(window.matchMedia('(display-mode: standalone)').matches){ if(p)p.style.display='none'; return; }
+  window.addEventListener('beforeinstallprompt',e=>{
+    e.preventDefault(); deferredPrompt=e;
+    if(s)s.textContent='Prête à être installée sur le téléphone.';
+  });
+  if(b)b.addEventListener('click',async()=>{
+    if(!deferredPrompt){
+      const samsung=/SamsungBrowser/i.test(navigator.userAgent);
+      if(s)s.innerHTML=samsung?'Ouvre <b>http://127.0.0.1:8765/</b> dans Chrome, puis menu ⋮ → <b>Installer l’application</b>. Samsung Internet peut ne pas proposer l’installation PWA locale.':'Dans Chrome : menu ⋮ → <b>Installer l’application</b>. Si l’option n’apparaît pas encore, attends « Mode hors ligne prêt » puis recharge une fois.';
+      return;
+    }
+    deferredPrompt.prompt();
+    const choice=await deferredPrompt.userChoice;
+    if(s)s.textContent=choice.outcome==='accepted'?'Installation lancée.':'Installation annulée.';
+    deferredPrompt=null;
+  });
+  if(h)h.onclick=()=>p.style.display='none';
+  if(s)s.textContent='Préparation rapide du mode hors ligne… Le téléchargement des pages de cours se fera ensuite à la demande.'
+  window.addEventListener('appinstalled',()=>{ if(p)p.style.display='none'; });
+})();
+</script>
+
+
+<script>
+(function(){
+ const BUILD='3200';
+ function panel(msg){
+   let x=document.getElementById('bootError');
+   if(!x){x=document.createElement('div');x.id='bootError';x.style.cssText='position:fixed;z-index:99999;left:8px;right:8px;top:8px;padding:11px;background:#5a2025;color:#fff;border:1px solid #ff9ba2;border-radius:10px;font:12px system-ui';document.body.appendChild(x)}
+   x.innerHTML='<b>Erreur de démarrage v3.20.0</b><div style="margin-top:4px">'+msg+'</div><button id="bootReload" style="margin-top:7px;padding:7px 10px">Recharger</button>';
+   document.getElementById('bootReload').onclick=()=>location.reload();
+ }
+ function load(src){return new Promise((ok,no)=>{const s=document.createElement('script');s.src=src;s.onload=ok;s.onerror=()=>no(new Error('Impossible de charger '+src));document.body.appendChild(s)})}
+ async function boot(){
+   try{
+     await load('./content.js?build='+BUILD);
+     await load('./original_corpus.js?build='+BUILD);
+     await load('./exercises.js?build='+BUILD);
+     await load('./app.js?build='+BUILD);
+     if(window.__ADAPTIVE_BUILD!=='3.20.0-original-pdfs'||!window.__ADAPTIVE_BOOT_OK){
+       throw new Error(window.__ADAPTIVE_LAST_ERROR || 'Le moteur chargé ne correspond pas au build v3.20.0.');
+     }
+     if('serviceWorker' in navigator){
+       try{
+         await navigator.serviceWorker.register('./sw.js?build='+BUILD);
+         await navigator.serviceWorker.ready;
+         const status=document.getElementById('installStatus');if(status)status.textContent='Mode hors ligne prêt.';
+       }catch(e){console.warn('Service Worker',e)}
+     }
+   }catch(e){console.error(e);panel(String(e.message||e))}
+ }
+ boot();
+})();
+</script>
+
+</body></html>
