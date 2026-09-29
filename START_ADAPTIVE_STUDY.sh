@@ -8,7 +8,9 @@ echo "Dossier détecté : $HERE"
 
 # Locate the app folder robustly.
 APPDIR=""
-if [ -f "$HERE/app/index.html" ]; then
+if [ -f "$HERE/local_instance/app/index.html" ]; then
+  APPDIR="$HERE/local_instance/app"
+elif [ -f "$HERE/app/index.html" ]; then
   APPDIR="$HERE/app"
 elif [ -f "$HERE/AdaptiveStudyInstall/app/index.html" ]; then
   APPDIR="$HERE/AdaptiveStudyInstall/app"
