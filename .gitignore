@@ -11,3 +11,4 @@ app/content.expanded.json
 *.ocr.txt
 __pycache__/
 .DS_Store
+local_instance/
