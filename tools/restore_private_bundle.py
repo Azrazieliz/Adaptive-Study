@@ -10,12 +10,17 @@ import shutil
 import zipfile
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
+LOCAL_APP = ROOT / 'local_instance' / 'app'
 PRIVATE_PREFIX = 'AdaptiveStudyInstall/app/'
 PRIVATE_FILES = {'content.js', 'original_corpus.js', 'exercises.js'}
 
 
 def restore(bundle: pathlib.Path) -> int:
     count = 0
+    LOCAL_APP.mkdir(parents=True, exist_ok=True)
+    for public in (ROOT / 'app').iterdir():
+        if public.is_file() and public.name not in PRIVATE_FILES:
+            shutil.copy2(public, LOCAL_APP / public.name)
     with zipfile.ZipFile(bundle) as source:
         names = set(source.namelist())
         required = {PRIVATE_PREFIX + name for name in PRIVATE_FILES}
@@ -29,7 +34,7 @@ def restore(bundle: pathlib.Path) -> int:
                 raise ValueError('Chemin non valide dans l’archive.')
             if relative.parts[0] != 'assets' and str(relative) not in PRIVATE_FILES:
                 continue
-            destination = ROOT / 'app' / relative
+            destination = LOCAL_APP / relative
             destination.parent.mkdir(parents=True, exist_ok=True)
             with source.open(item) as src, destination.open('wb') as dst:
                 shutil.copyfileobj(src, dst)
@@ -41,4 +46,4 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('archive', type=pathlib.Path, help='Archive privée AdaptiveStudy_Originaux_623_2026-09-28.zip')
     args = parser.parse_args()
-    print(f'{restore(args.archive)} fichiers privés restaurés. Ne pas les publier sur GitHub.')
+    print(f'{restore(args.archive)} fichiers privés restaurés dans {LOCAL_APP}.')
