@@ -1,6 +1,6 @@
 # Concours — Adaptive Study
 
-Code source de l'application d'étude adaptative mobile (PWA), version 3.20.0.
+Code source de l'application d'étude adaptative mobile (PWA), version 3.20.1.
 
 Le dépôt **public** contient le moteur et l'interface. Les PDF de cours, sujets et corrigés fournis par l'utilisateur, les images de leurs pages, ainsi que les données pédagogiques compilées ne sont pas publiés. Une copie fraîche du dépôt affiche les 7 matières et la structure des cours, sans banque de questions active.
 
@@ -27,3 +27,7 @@ Le paquet privé donne accès à 623 unités originales sous forme de pages de s
 ## Sources et traçabilité
 
 Toute future question ou flashcard doit être justifiée par les PDF de cours, QE, annales et corrigés fournis. Les flashcards proviennent des cours ; les annales/QE servent à comprendre le style. Ne jamais conclure qu'une proposition est fausse parce qu'elle n'est pas mentionnée dans un PDF. Les documents incomplets et les questions dérivées non vérifiées restent désactivés.
+
+## Lecture visuelle des FC (v3.20.1)
+
+La vue Cours montre les pages originales en vignettes et permet la reprise à la dernière page, le marquage de favoris et l’accès direct à une page. Les éventuels points textuels restent séparés des pages source ; un index OCR est signalé comme transcription à contrôler. La version privée actualisée contient 31 cours et 716 images de pages, dont la FC d’Électrostatique actualisée, l’addendum Grands problèmes et la FC anticipée Gaz–Pression autorisée. Une première synthèse structurée du tissu cartilagineux est intégrée ; les 30 autres synthèses attendent la vérification de leurs FC. Les PDF et les pages ne sont pas publiés dans ce dépôt.

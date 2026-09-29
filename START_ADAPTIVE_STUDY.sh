@@ -3,7 +3,7 @@ set -e
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 
-echo "=== Adaptive Study v3.20.0-original-pdfs — serveur local ==="
+echo "=== Adaptive Study v3.20.1-course-visual — serveur local ==="
 echo "Dossier détecté : $HERE"
 
 # Locate the app folder robustly.
@@ -40,8 +40,8 @@ fi
 
 echo ""
 echo "Application trouvée : $APPDIR"
-echo "Serveur local : http://127.0.0.1:8765/index.html?build=3200"
-echo "Build attendu : v3.20.0-original-pdfs"
+echo "Serveur local : http://127.0.0.1:8765/index.html?build=3201"
+echo "Build attendu : v3.20.1-course-visual"
 echo ""
 echo "Dans Chrome :"
 echo "  1. Ouvre http://127.0.0.1:8765/"

@@ -1,4 +1,4 @@
-window.__ADAPTIVE_BUILD='3.20.0-original-pdfs';
+window.__ADAPTIVE_BUILD='3.20.1-course-visual';
 
 (()=>{
 const C=window.APP_CONTENT||window.STUDY_CONTENT,KEY='adaptive-study-v22-state',DAY=86400000;
@@ -652,7 +652,30 @@ function entitySection(es,mode){
 }
 
 function closeCourseReader(){
- const el=$('courseReaderOverlay');if(el)el.remove();readerState=null;
+ const chid=readerState?.chid,el=$('courseReaderOverlay');if(el)el.remove();readerState=null;
+ const panel=document.querySelector('.course-pages-panel');if(chid&&panel&&$('sumCh')?.value===chid){panel.outerHTML=coursePageGallery(chid);bindCourseGallery(chid)}
+}
+function courseReadingState(chid){
+ try{return JSON.parse(localStorage.getItem('adaptive-course-reading:'+chid)||'{}')||{}}catch(_){return{}}
+}
+function saveCourseReadingState(chid,patch){
+ try{localStorage.setItem('adaptive-course-reading:'+chid,JSON.stringify({...courseReadingState(chid),...patch}))}catch(_){}
+}
+function coursePageLabel(chid,i){
+ const start=C.courseMeta?.[chid]?.addendumStartPage;
+ return start&&i+1>=start?`Addendum p. ${i+2-start}`:`p. ${i+1}`;
+}
+function coursePageGallery(chid){
+ const pages=C.coursePages?.[chid]||[];
+ if(!pages.length)return '<div class="empty">Les pages de cette FC ne sont pas encore installées dans cette version.</div>';
+ const state=courseReadingState(chid),last=clamp(Number(state.page)||0,0,pages.length-1),saved=(state.saved||[]).filter(n=>Number.isInteger(n)&&n>=0&&n<pages.length);
+ const tiles=pages.map((path,i)=>`<button class="course-page-tile" type="button" data-page-jump="${i}" aria-label="Lire ${coursePageLabel(chid,i)}"><img loading="lazy" src="${esc(readerPageUrl(path))}" alt="Aperçu ${coursePageLabel(chid,i)}"><span>${coursePageLabel(chid,i)}${saved.includes(i)?' ★':''}</span></button>`).join('');
+ return `<section class="course-pages-panel"><div class="course-pages-head"><div><h3>Parcourir la FC</h3><p class="small">Aperçus des pages originales. Touchez une page pour lire tous ses détails.</p></div><span class="badge">${pages.length} pages</span></div><div class="course-quick-actions"><button class="btn primary" data-page-jump="${last}">Reprendre ${coursePageLabel(chid,last)}</button>${saved.length?`<label class="course-saved-label">Favoris <select id="courseSavedPage" class="field"><option value="">Choisir une page</option>${saved.map(i=>`<option value="${i}">${coursePageLabel(chid,i)}</option>`).join('')}</select></label>`:''}<label class="course-page-number">Aller à la page <input id="coursePageNumber" type="number" min="1" max="${pages.length}" placeholder="1–${pages.length}" class="field"></label></div><div class="course-page-grid">${tiles}</div></section>`;
+}
+function bindCourseGallery(chid){
+ document.querySelectorAll('[data-page-jump]').forEach(b=>b.onclick=()=>openCourseReader(chid,Number(b.dataset.pageJump)));
+ const pageInput=$('coursePageNumber');if(pageInput)pageInput.onchange=()=>{const n=Number(pageInput.value),length=C.coursePages?.[chid]?.length||0;if(Number.isInteger(n)&&n>=1&&n<=length)openCourseReader(chid,n-1)};
+ const saved=$('courseSavedPage');if(saved)saved.onchange=()=>{if(saved.value!=='')openCourseReader(chid,Number(saved.value))};
 }
 function readerPageUrl(path){return new URL('./'+path,location.href).href}
 async function ensureReaderPage(path){
@@ -674,12 +697,14 @@ async function renderReaderPage(){
  if(!readerState)return;
  const pages=C.coursePages?.[readerState.chid]||[];if(!pages.length)return;
  readerState.page=clamp(readerState.page,0,pages.length-1);
+ saveCourseReadingState(readerState.chid,{page:readerState.page});
  const img=$('readerImage'),counter=$('readerCounter'),range=$('readerRange'),status=$('readerPageStatus');
- if(counter)counter.textContent=`${readerState.page+1} / ${pages.length}`;
+ if(counter)counter.textContent=`${coursePageLabel(readerState.chid,readerState.page)} · ${readerState.page+1}/${pages.length}`;
  if(range)range.value=readerState.page+1;
+ const mark=$('readerBookmark');if(mark){const saved=courseReadingState(readerState.chid).saved||[];mark.textContent=saved.includes(readerState.page)?'★ Enregistrée':'☆ Garder';mark.setAttribute('aria-pressed',saved.includes(readerState.page)?'true':'false')}
  if(status){status.className='reader-page-status';status.innerHTML='Chargement de la page…'}
  if(img){
-   img.style.display='none';img.alt=`Page ${readerState.page+1}`;img.style.width=`${readerState.zoom}%`;
+   img.style.display='none';img.alt=coursePageLabel(readerState.chid,readerState.page);img.style.width=`${readerState.zoom}%`;
    const path=pages[readerState.page],url=await ensureReaderPage(path);
    if(!readerState)return;
    if(!url){
@@ -707,19 +732,20 @@ function openMindMap(chid){
  $('mindMapClose').onclick=closeMindMap;const land=$('mindMapLandscape');if(land)land.onclick=mindMapLandscape;$('mindMapMinus').onclick=()=>setZoom(Number(range.value)-10);$('mindMapPlus').onclick=()=>setZoom(Number(range.value)+10);range.oninput=e=>setZoom(e.target.value);$('mindMapFit').onclick=()=>{const v=Math.max(25,Math.min(100,Math.floor((canvas.clientWidth/1920)*100)));setZoom(v);canvas.scrollTo({left:0,top:0})};
  setZoom(100);
 }
-function openCourseReader(chid){
+function openCourseReader(chid,page){
  const pages=C.coursePages?.[chid]||[];
  if(!pages.length){toast('Lecteur interne non disponible pour cette fiche. Utilise le téléchargement du PDF.');return}
  closeCourseReader();
- readerState={chid,page:0,zoom:100};
+ readerState={chid,page:clamp(Number.isInteger(page)?page:(Number(courseReadingState(chid).page)||0),0,pages.length-1),zoom:100};
  const title=chs[chid]?.title||'Fiche de cours';
  const overlay=document.createElement('div');overlay.id='courseReaderOverlay';overlay.className='course-reader-overlay';
- overlay.innerHTML=`<div class="reader-top"><button id="readerClose" class="btn ghost compact">← Retour au cours</button><div class="reader-title grow">${esc(title)}</div><span id="readerCounter" class="badge"></span></div><div class="reader-tools"><button id="readerPrev" class="btn">‹</button><input id="readerRange" type="range" min="1" max="${pages.length}" value="1"><button id="readerNext" class="btn">›</button><button id="readerZoomOut" class="btn">−</button><span id="readerZoomLabel" class="badge">100%</span><button id="readerZoomIn" class="btn">+</button><button id="readerCache" class="btn soft">Synchroniser</button></div><div id="readerCanvas" class="reader-canvas"><div id="readerPageStatus" class="reader-page-status">Chargement de la page…</div><img id="readerImage" draggable="false"></div>`;
+ overlay.innerHTML=`<div class="reader-top"><button id="readerClose" class="btn ghost compact">← Retour au cours</button><div class="reader-title grow">${esc(title)}</div><span id="readerCounter" class="badge"></span></div><div class="reader-tools"><button id="readerPrev" class="btn">‹</button><input id="readerRange" type="range" min="1" max="${pages.length}" value="1"><button id="readerNext" class="btn">›</button><button id="readerBookmark" class="btn soft" aria-pressed="false">☆ Garder</button><button id="readerZoomOut" class="btn">−</button><span id="readerZoomLabel" class="badge">100%</span><button id="readerZoomIn" class="btn">+</button><button id="readerCache" class="btn soft">Synchroniser</button></div><div id="readerCanvas" class="reader-canvas"><div id="readerPageStatus" class="reader-page-status">Chargement de la page…</div><img id="readerImage" draggable="false"></div>`;
  document.body.appendChild(overlay);
  $('readerClose').onclick=closeCourseReader;
  $('readerPrev').onclick=()=>{readerState.page--;renderReaderPage()};
  $('readerNext').onclick=()=>{readerState.page++;renderReaderPage()};
  $('readerRange').oninput=e=>{readerState.page=Number(e.target.value)-1;renderReaderPage()};
+ $('readerBookmark').onclick=()=>{const old=courseReadingState(chid).saved||[],set=new Set(old);set.has(readerState.page)?set.delete(readerState.page):set.add(readerState.page);saveCourseReadingState(chid,{saved:[...set].sort((a,b)=>a-b)});renderReaderPage()};
  $('readerZoomOut').onclick=()=>{readerState.zoom=clamp(readerState.zoom-25,75,250);$('readerZoomLabel').textContent=readerState.zoom+'%';renderReaderPage()};
  $('readerZoomIn').onclick=()=>{readerState.zoom=clamp(readerState.zoom+25,75,250);$('readerZoomLabel').textContent=readerState.zoom+'%';renderReaderPage()};
  $('readerCache').onclick=()=>cacheCoursePages(chid,true);
@@ -747,8 +773,8 @@ async function cacheCoursePages(chid,show=true){
  renderReaderPage();
 }
 async function warmAllCoursePages(){
- // Background sync only when the local server is available; never blocks app startup.
- const all=Object.values(C.coursePages||{}).flat();if(!all.length)return;
+ // Keep startup light; full offline copies remain an explicit action in the reader.
+ const all=Object.values(C.coursePages||{}).flatMap(pages=>pages.slice(0,1));if(!all.length)return;
  let cursor=0;const workers=Array.from({length:6},async()=>{while(cursor<all.length){const path=all[cursor++],url=readerPageUrl(path);try{if(!(await caches.match(url))){const r=await fetch(url,{cache:'reload'});if(r.ok){const c=await caches.open('adaptive-pages-v3-18-content');await c.put(url,r.clone())}}}catch(_){} }});
  await Promise.all(workers);
  try{localStorage.setItem('adaptive-study-course-cache-318-content','ready')}catch(_){}
@@ -778,24 +804,39 @@ function sourceDetailsHtml(chid,mode='all'){
  const note=mode==='high'?'Valeurs, molécules, mécanismes, ultrastructures, indicateurs ou relations littérales priorisés selon la matière. Le reste reste accessible dans la synthèse complète.':'Couverture page par page issue exclusivement du PDF. Ce registre complète les points structurés et empêche que les détails secondaires disparaissent.';
  return `<div class="sheet-section tone-cyan"><div class="sheet-section-title">${title} <span class="badge accent">${arr.length}/${all.length}</span></div><div class="callout"><b>Index détaillé du PDF</b><div class="small">${note} Le PDF affiché dans le lecteur reste l’autorité pour toute formule, valeur ou ligne dont la transcription paraît dégradée.</div></div>${pages.map(p=>`<details class="source-detail-page"><summary>Page ${p} <span class="badge">${by[p].length}</span></summary><div class="source-detail-list">${by[p].map(x=>`<div class="source-detail-row"><div>${esc(x.text)}</div><div class="row detail-tags">${(x.categories||[]).slice(0,3).map(c=>`<span class="badge">${esc(sourceDetailTagLabel(c))}</span>`).join('')}<span class="source right">PDF p.${p}</span></div></div>`).join('')}</div></details>`).join('')}</div>`;
 }
+function guideSection(chid,section,mode){
+ const entries=(section.items||[]).filter(item=>mode==='all'||(item.priority||0)>=2);
+ if(!entries.length)return'';
+ const sourceButton=item=>Number.isInteger(item.page)?`<button class="guide-source" data-guide-page="${item.page-1}" title="Voir la FC originale page ${item.page}">FC p. ${item.page} ↗</button>`:'';
+ const cell=item=>`<div class="guide-entry"><div class="guide-entry-title">${esc(item.label||'')}</div><div class="guide-entry-body">${esc(item.value||'')}</div>${sourceButton(item)}</div>`;
+ let body='';
+ if(section.type==='table')body=`<div class="guide-table"><div class="guide-table-head"><span>${esc(section.columns?.[0]||'Élément')}</span><span>${esc(section.columns?.[1]||'À retenir')}</span></div>${entries.map(item=>`<div class="guide-table-row"><strong>${esc(item.label||'')}</strong><div>${esc(item.value||'')} ${sourceButton(item)}</div></div>`).join('')}</div>`;
+ else if(section.type==='steps')body=`<ol class="guide-steps">${entries.map(item=>`<li>${cell(item)}</li>`).join('')}</ol>`;
+ else body=`<div class="guide-card-grid">${entries.map(cell).join('')}</div>`;
+ return `<section class="guide-section guide-${esc(section.type||'list')}"><div class="guide-section-heading"><h3>${esc(section.title)}</h3><span class="badge">${entries.length}</span></div>${body}</section>`;
+}
 function chapterSummary(chid,mode='high'){
- const c=chs[chid],s=subs[c.subjectId],allFacts=chapterFacts(chid),adv=(C.advice||[]).filter(a=>a.chapterId===chid);
- const fs=mode==='high'?allFacts.filter(f=>(f.importance||1)>=1.2||['trap','formula','number','algorithm'].includes(f.category)):allFacts;
- const sourceQs=C.questions.filter(q=>q.chapterId===chid&&['ORIGINAL_ANNAL','ORIGINAL_QE','ORIGINAL_TRAINING','TRAINING_QROC'].includes(q.provenance));
- const modeTitle=mode==='high'?'Synthèse haute rentabilité':'Synthèse complète';
- const factHtml=fs.length?`<div class="sheet-section tone-green"><div class="sheet-section-title">${modeTitle} <span class="badge ok">${fs.length}/${allFacts.length} points</span></div><div class="callout ok"><b>Provenance cours</b><div class="small">${mode==='high'?'Sélection des points les plus prioritaires, pièges, formules, valeurs et méthodes du corpus certifié.':'Tous les points de cours actifs certifiés sont affichés.'} La réorganisation pédagogique n’ajoute aucune information au PDF.</div></div>${fs.map(f=>`<div class="sheet-fact tone-${toneForFact(f)}"><div class="sheet-fact-head"><b>${esc(f.term)}</b><span class="badge">${esc(cardKindForFact(f))}</span></div><div>${esc(f.answer)}</div><div class="source">${esc(sourceText(f.source))}</div></div>`).join('')}</div>`:`<div class="callout warn"><b>Aucun point de cours actif</b><div class="small">Aucun contenu n’est généré pour ce chapitre sans document source suffisant.</div></div>`;
- const detailHtml=sourceDetailsHtml(chid,mode==='high'?'high':'all');
- const adviceHtml=adv.length?`<div class="sheet-section tone-red"><div class="sheet-section-title">Conseils méthodologiques <span class="badge">${adv.length}</span></div><div class="small" style="margin-bottom:7px">Ces conseils sont des stratégies de travail et ne sont pas présentés comme des informations du cours.</div>${adv.map(a=>`<div class="sheet-fact tone-red"><div class="sheet-fact-head"><b>${esc(a.title)}</b><span class="badge warn">Conseil</span></div><div>${esc(a.body)}</div></div>`).join('')}</div>`:'';
- const annHtml=sourceQs.length?`<div class="sheet-section tone-blue"><div class="sheet-section-title">Annales / QE / entraînements textuels conservés <span class="badge">${sourceQs.length}</span></div>${sourceQs.map(q=>`<div class="annal-line"><div class="annal-q">${esc(q.stem)}</div>${q.explanation?`<div class="annal-expl">${esc(q.explanation)}</div>`:''}<div class="source">${esc(sourceText(q.source))}</div></div>`).join('')}</div>`:'';
- const originals=(window.ORIGINAL_CORPUS||[]).filter(q=>q.chapterId===chid);
- const originalsHtml=originals.length?`<div class="sheet-section tone-blue"><div class="sheet-section-title">Questions originales du chapitre <span class="badge accent">${originals.length}</span></div><p class="small">Pages originales des QE et annales avec leurs pages de corrigé. Réponses automatiques désactivées pendant la vérification des transcriptions.</p><button class="btn primary" data-original-course="${esc(chid)}">Parcourir les questions et corrigés</button></div>`:'';
- return `<div class="study-sheet"><div class="summary-head sheet-head"><div class="row"><span class="badge accent">${esc(s.name)}</span><span class="badge">Corpus PDF</span></div><h2>${esc(c.title)}</h2>${originalCourseBlock(chid)}</div>${originalsHtml}${factHtml}${detailHtml}${adviceHtml}${annHtml}</div>`;
+ const c=chs[chid],subject=subs[c.subjectId],pages=C.coursePages?.[chid]||[],guide=C.courseGuides?.[chid];
+ const version=C.courseMeta?.[chid]?.sourceVersion==='ANTICIPEE_AUTORISEE'?' · FC anticipée autorisée':'';
+ const heading=`<div class="course-visual-hero"><div class="row"><span class="badge accent">${esc(subject.name)}</span><span class="badge">${pages.length} pages${version}</span></div><h2>${esc(c.title)}</h2><p>${mode==='visual'?'Pages de la FC originale.':'Synthèse réorganisée à partir des pages du cours. Chaque élément renvoie à sa page originale.'}</p><div class="course-hero-actions">${pages.length?`<button class="btn soft" data-open-course="${esc(chid)}">Lire la FC originale</button>`:''}${C.mindMaps?.[chid]?`<button class="btn" data-mindmap="${esc(chid)}">Carte mentale</button>`:''}</div></div>`;
+ if(mode==='visual')return `<div class="study-sheet course-visual">${heading}${coursePageGallery(chid)}</div>`;
+ if(!guide)return `<div class="study-sheet course-visual">${heading}<div class="callout warn"><b>Synthèse structurée en cours de vérification</b><div class="small">Les pages de la FC sont disponibles. Aucun tableau ou détail n’est affiché ici tant que sa transcription et sa source n’ont pas été contrôlées.</div></div>${coursePageGallery(chid)}</div>`;
+ const count=(guide.sections||[]).flatMap(x=>x.items||[]).filter(x=>mode==='all'||(x.priority||0)>=2).length;
+ return `<div class="study-sheet course-visual">${heading}<div class="guide-intro"><b>${mode==='high'?'À revoir en priorité':'Cours réorganisé · tous les détails vérifiés'}</b><span class="badge">${count} éléments</span><p>${mode==='high'?'Les détails non prioritaires restent dans « Complet ».':'La FC originale reste accessible pour le texte et les figures dans leur mise en page.'}</p></div>${(guide.sections||[]).map(section=>guideSection(chid,section,mode)).join('')}</div>`;
 }
 function renderCourse(){
- $('courseContent').innerHTML=`<div class="summary-toolbar"><div class="card flat"><div class="grid"><div class="c5"><label class="lbl">Matière</label><select id="sumSub" class="field">${subOpts()}</select></div><div class="c7"><label class="lbl">Chapitre</label><select id="sumCh" class="field"></select></div></div><div class="row" style="margin-top:7px"><button id="sumHigh" class="btn primary grow">Haute rentabilité</button><button id="sumFull" class="btn soft grow">Synthèse complète</button></div></div></div><div id="summaryOut"></div>`;
- const s=$('sumSub'),c=$('sumCh'),upd=()=>c.innerHTML=chapterOpts(s.value,false);s.onchange=upd;upd();
- const show=mode=>{const id=c.value;if(!id){$('summaryOut').innerHTML='<div class="empty">Aucun PDF source actif pour cette matière.</div>';return}$('summaryOut').innerHTML=chapterSummary(id,mode);document.querySelectorAll('[data-original-course]').forEach(b=>b.onclick=()=>openOriginalCourse(b.dataset.originalCourse));document.querySelectorAll('[data-open-course]').forEach(b=>b.onclick=()=>openCourseReader(b.dataset.openCourse));document.querySelectorAll('[data-cache-pages]').forEach(b=>b.onclick=()=>cacheCoursePages(b.dataset.cachePages));document.querySelectorAll('[data-course-cards]').forEach(b=>b.onclick=()=>startChapterCards(b.dataset.courseCards));document.querySelectorAll('[data-mindmap]').forEach(b=>b.onclick=()=>openMindMap(b.dataset.mindmap))};
- $('sumHigh').onclick=()=>show('high');$('sumFull').onclick=()=>show('all');show('high')
+ $('courseContent').innerHTML=`<div class="summary-toolbar"><div class="card flat"><div class="grid"><div class="c5"><label class="lbl">Matière</label><select id="sumSub" class="field">${subOpts()}</select></div><div class="c7"><label class="lbl">Cours</label><select id="sumCh" class="field"></select></div></div><div class="course-view-tabs" role="group" aria-label="Vue du cours"><button id="sumHigh" class="btn primary" aria-pressed="true">Essentiel</button><button id="sumFull" class="btn soft" aria-pressed="false">Complet</button><button id="sumVisual" class="btn soft" aria-pressed="false">PDF original</button></div></div></div><div id="summaryOut"></div>`;
+ const subject=$('sumSub'),chapter=$('sumCh'),upd=()=>chapter.innerHTML=chapterOpts(subject.value,false);subject.onchange=()=>{upd();show('high')};upd();
+ const buttons={high:$('sumHigh'),all:$('sumFull'),visual:$('sumVisual')};
+ const show=mode=>{
+  Object.entries(buttons).forEach(([key,button])=>{button.className='btn '+(key===mode?'primary':'soft');button.setAttribute('aria-pressed',key===mode?'true':'false')});
+  const id=chapter.value;if(!id){$('summaryOut').innerHTML='<div class="empty">Aucune FC installée pour cette matière.</div>';return}
+  $('summaryOut').innerHTML=chapterSummary(id,mode);bindCourseGallery(id);
+  document.querySelectorAll('[data-guide-page]').forEach(b=>b.onclick=()=>openCourseReader(id,Number(b.dataset.guidePage)));
+  document.querySelectorAll('[data-open-course]').forEach(b=>b.onclick=()=>openCourseReader(b.dataset.openCourse));
+  document.querySelectorAll('[data-mindmap]').forEach(b=>b.onclick=()=>openMindMap(b.dataset.mindmap));
+ };
+ chapter.onchange=()=>show('high');Object.entries(buttons).forEach(([mode,button])=>button.onclick=()=>show(mode));show('high');
 }
 function openOriginalCourse(chid){
  const list=(window.ORIGINAL_CORPUS||[]).filter(q=>q.chapterId===chid);
