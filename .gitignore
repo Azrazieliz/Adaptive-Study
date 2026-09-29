@@ -1,0 +1,13 @@
+# User-provided courses, original questions/corrections and generated page images
+app/assets/
+app/content.expanded.json
+*.pdf
+*.zip
+*.cbz
+*.jpg
+*.jpeg
+*.png
+*.webp
+*.ocr.txt
+__pycache__/
+.DS_Store
