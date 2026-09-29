@@ -1,0 +1,1 @@
+window.__EXERCISES_BUILD='3.18.0-final';window.AdaptiveExercises={auditStatus:'PRIVATE_CORPUS_REQUIRED',version:'3.18.0-final',documentQuestionsDisabled:true,counts:{phys:0,bio:0,biocell:0},generate(){return null}};
