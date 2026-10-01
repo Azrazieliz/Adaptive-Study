@@ -45,7 +45,7 @@ jobs:
           cp "$ANDROID_HOME/build-tools/35.0.0/zipalign" /tmp/apk-tools/
           cp "$ANDROID_HOME/build-tools/35.0.0/apksigner" /tmp/apk-tools/
           cp "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar" /tmp/apk-tools/lib/
-          LIBCPP="$(find "$ANDROID_HOME" -name 'libc++.so' -type f | head -n 1)"
+          LIBCPP="$(find "$ANDROID_HOME" -name 'libc++.so' -type f -print -quit)"
           test -n "$LIBCPP"
           cp "$LIBCPP" /tmp/apk-tools/
       - name: Upload signing tools
