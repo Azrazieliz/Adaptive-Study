@@ -99,7 +99,7 @@ public class MainActivity extends Activity {
         AssetServer(AssetManager assets) throws IOException {
             super("AdaptiveStudyAssetServer");
             this.assets = assets;
-            this.serverSocket = new ServerSocket(0, 50, InetAddress.getByName("127.0.0.1"));
+            this.serverSocket = new ServerSocket(39117, 50, InetAddress.getByName("127.0.0.1"));
             setDaemon(true);
         }
 
