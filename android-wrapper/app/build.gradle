@@ -10,8 +10,8 @@ android {
         applicationId 'com.azrazieliz.adaptivestudy'
         minSdk 26
         targetSdk 35
-        versionCode 3242
-        versionName '3.24.2'
+        versionCode 3243
+        versionName '3.24.3'
     }
 
     buildTypes {
