@@ -38,3 +38,17 @@ jobs:
           path: android-wrapper/app/build/outputs/apk/release/app-release-unsigned.apk
           if-no-files-found: error
           retention-days: 7
+      - name: Collect signing tools
+        shell: bash
+        run: |
+          mkdir -p /tmp/apk-tools/lib
+          cp "$ANDROID_HOME/build-tools/35.0.0/zipalign" /tmp/apk-tools/
+          cp "$ANDROID_HOME/build-tools/35.0.0/apksigner" /tmp/apk-tools/
+          cp "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar" /tmp/apk-tools/lib/
+      - name: Upload signing tools
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apk-tools
+          path: /tmp/apk-tools
+          if-no-files-found: error
+          retention-days: 1
