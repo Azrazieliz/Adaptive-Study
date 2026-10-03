@@ -1,9 +1,9 @@
-const CORE='adaptive-study-v3-25-0-core';
-const RUNTIME='adaptive-study-v3-25-0-runtime';
-const COURSE='adaptive-course-v3-25-0';
-const PAGES='adaptive-pages-v3-25-0';
-const MEDIA='adaptive-media-v3-25-0';
-const CORE_ASSETS=["./index.html?build=3250","./styles.css","./content.js?build=3250","./original_corpus.js?build=3250","./exercises.js?build=3250","./app.js?build=3250","./manifest.webmanifest"];
+const CORE='adaptive-study-v3-25-1-core';
+const RUNTIME='adaptive-study-v3-25-1-runtime';
+const COURSE='adaptive-course-v3-25-1';
+const PAGES='adaptive-pages-v3-25-1';
+const MEDIA='adaptive-media-v3-25-1';
+const CORE_ASSETS=["./index.html?build=3251","./styles.css","./content.js?build=3251","./original_corpus.js?build=3251","./exercises.js?build=3251","./app.js?build=3251","./manifest.webmanifest"];
 async function cacheMany(name,urls,workers=8){const c=await caches.open(name);let i=0;async function w(){while(i<urls.length){const u=urls[i++];try{const r=await fetch(u,{cache:'reload'});if(r.ok)await c.put(u,r.clone());}catch(e){}}}await Promise.all(Array.from({length:Math.min(workers,urls.length||1)},w));}
 self.addEventListener('install',e=>{e.waitUntil(cacheMany(CORE,CORE_ASSETS,4).then(()=>self.skipWaiting()));});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>(/^(adaptive-study|adaptive-course|adaptive-pages|adaptive-media|adaptive-v)/.test(k))&&![CORE,RUNTIME,COURSE,PAGES,MEDIA].includes(k)).map(k=>caches.delete(k)))).then(()=>self.clients.claim()));});
