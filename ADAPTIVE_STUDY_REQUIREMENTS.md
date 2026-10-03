@@ -39,8 +39,14 @@
 
 - Flashcards must be autonomous, natural and reversible for rereading the question after revealing the answer.
 - Avoid synonymous duplicate cards and support-dependent wording (“on this page”, “in the figure”, etc.).
-- “Essential” is a dense pre-exam reread; “Complete” is exhaustive within the supplied corpus.
+- “Essential” is a dense pre-exam reread: compact enough to finish quickly, limited to the highest-yield repères, with no per-item source block or decorative padding that forces excessive scrolling. “Complete” is exhaustive within the supplied corpus.
 - Error notebook must be filterable and show correction, source, repetition count, timing and remediation actions.
+
+## Native APK behavior
+
+- Native APK mode must never display PWA/browser installation controls.
+- Native APK mode must not register the PWA service worker; assets are already packaged locally.
+- Android system-bar insets must be respected so headers and bottom navigation are never clipped or hidden.
 
 ## Release discipline
 
@@ -54,8 +60,9 @@
 This is a hard release requirement.
 
 - Every flashcard must be independently understandable without knowing which PDF, page, fiche or prior card it came from.
-- Every flashcard front must state the relevant chapter/topic or an equally explicit subject referent.
+- Every flashcard must contain enough natural subject/context wording to be understandable on its own. The chapter may be shown as separate metadata and must not be mechanically prepended to every prompt.
 - No unresolved pronouns or deictic wording such as “this experiment”, “this example”, “in this case”, or “according to the document/FC/course”.
+- Mechanical chapter-name prefixes such as `Chapter — question` are prohibited; autonomy must come from the wording itself, not repeated boilerplate.
 - Every question must contain all information needed to answer it. If a figure, table or page extract is required, that media must be bundled with the same question and must load in the app.
 - Questions must never depend on remembering a previous question in the session.
 - Source metadata remains attached for traceability, but it must never be required to understand the prompt.
