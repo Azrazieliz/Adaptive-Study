@@ -12,6 +12,8 @@ chk(f"window.__ORIGINAL_CORPUS_BUILD='{EXPECTED}'" in oc,'original corpus build'
 chk('adaptive-study-v3-25-4-core' in sw and 'build=3254' in sw,'service worker build')
 prefix='window.STUDY_CONTENT = ';d=json.loads(ct[len(prefix):].strip().rstrip(';'))
 chk(d.get('pack',{}).get('version')==EXPECTED,'content build');chk(len(d.get('subjects',[]))==7,'subject count');chk(not d.get('questions'),'public questions must stay empty');chk(not d.get('flashcards'),'public flashcards must stay empty')
+ids={c.get('id') for c in d.get('chapters',[])}
+for required in ['chim_isomerie','bio_repliement','histo_osseux','histo_muscles1','biocell_apoptose','sp_precarite']: chk(required in ids,'missing course skeleton '+required)
 chk('window.__ADAPTIVE_NATIVE' in idx and "get(\'native\')===\'1\'" in idx,'native mode marker')
 chk("!window.__ADAPTIVE_NATIVE&&'serviceWorker' in navigator" in idx,'native service worker guard')
 chk('essentialGuideSections' in app and 'course-essential' in app,'dense Essential renderer')
