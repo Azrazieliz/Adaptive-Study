@@ -23,6 +23,13 @@
 - QROC reference target: 10 minutes.
 - Home mastery must be based on actual attempts, not placeholder/default content counts.
 
+## Multi-course selection
+
+- QCM setup must allow selecting one or multiple active courses within the chosen subject.
+- Flashcard setup must allow selecting one or multiple active courses; when all subjects are selected, active courses are grouped by subject.
+- Adaptive priority and session statistics must respect the exact selected course set.
+- Original-PDF browsing may require a single course because source pages are course-scoped.
+
 ## Questions and exercises
 
 - Match the observed exam style per subject/course; avoid generic placeholder wording.
@@ -34,6 +41,12 @@
 - Chemistry: isolated A–E reasoning/calculation; calculator not assumed.
 - Physics: linked large exercises; calculator allowed.
 - SHS: QROC and text commentary only when a usable sourced task/correction exists; never fabricate unsupported commentary material.
+
+## Course methodology reminders
+
+- User-provided course methodologies can be stored as per-course reminders.
+- Reminders appear compactly in course views and must never be invented from external knowledge.
+- Methodology reminders are separate from authoritative course facts.
 
 ## Flashcards, syntheses, errors
 
@@ -47,6 +60,7 @@
 - Native APK mode must never display PWA/browser installation controls.
 - Native APK mode must not register the PWA service worker; assets are already packaged locally.
 - Android system-bar insets must be respected so headers and bottom navigation are never clipped or hidden.
+- The in-app bottom navigation must sit above the Android OS navigation/gesture bar, not underneath it.
 
 ## Release discipline
 
