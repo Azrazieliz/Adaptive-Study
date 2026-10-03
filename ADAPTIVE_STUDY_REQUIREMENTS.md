@@ -48,3 +48,15 @@
 - Keep private educational data out of the public repository.
 - Run structural/data validation before producing an APK or updating `main`.
 - Do not ship an intermediate or partially synchronized build as the current release.
+
+## Autonomy of questions and flashcards
+
+This is a hard release requirement.
+
+- Every flashcard must be independently understandable without knowing which PDF, page, fiche or prior card it came from.
+- Every flashcard front must state the relevant chapter/topic or an equally explicit subject referent.
+- No unresolved pronouns or deictic wording such as “this experiment”, “this example”, “in this case”, or “according to the document/FC/course”.
+- Every question must contain all information needed to answer it. If a figure, table or page extract is required, that media must be bundled with the same question and must load in the app.
+- Questions must never depend on remembering a previous question in the session.
+- Source metadata remains attached for traceability, but it must never be required to understand the prompt.
+- Release validation must fail if these rules are violated.
