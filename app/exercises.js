@@ -1,1 +1,2 @@
-window.__EXERCISES_BUILD='3.18.0-final';window.AdaptiveExercises={auditStatus:'PRIVATE_CORPUS_REQUIRED',version:'3.18.0-final',documentQuestionsDisabled:true,counts:{phys:0,bio:0,biocell:0},generate(){return null}};
+window.__EXERCISES_BUILD='3.25.0-standalone-clean';
+window.AdaptiveExercises={auditStatus:'PRIVATE_CORPUS_REQUIRED',version:'3.25.0-standalone-clean',documentQuestionsDisabled:true,counts:{phys:0,bio:0,biocell:0},generate(){return null}};
