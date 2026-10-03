@@ -1,12 +1,12 @@
 # Concours — Adaptive Study
 
-Public source for the **Adaptive Study v3.25.2** mobile/PWA engine.
+Public source for the **Adaptive Study v3.25.3** mobile/PWA engine.
 
 The public repository contains the application engine, mobile interface, offline/runtime logic and Android wrapper. The user-owned medical course PDFs, page images, compiled flashcards, QCM/QROC banks and documentary originals are intentionally **not published**.
 
-The validated private v3.25.2 package currently contains **31 active courses, 5,291 flashcards, 6,322 QCM + 420 QROC (6,742 active questions), 623 documentary original units and four Santé publique mind maps**. Those counts describe the private release, not a fresh public clone.
+The validated private v3.25.3 package currently contains **31 active courses, 5,291 flashcards, 6,322 QCM + 420 QROC (6,742 active questions), 623 documentary original units and four Santé publique mind maps**. Those counts describe the private release, not a fresh public clone.
 
-## v3.25.2 changes
+## v3.25.3 changes
 
 - compact mobile dashboard with subject mastery and immediate adaptive priority;
 - adaptive priority driven by score, repeated errors, active response time and recency/unseen status;
@@ -25,12 +25,17 @@ The validated private v3.25.2 package currently contains **31 active courses, 5,
 - Essential course view is capped to a dense 26–42 high-yield repères per course, while Complete stays exhaustive;
 - Essential rows use compact source-page links instead of full source blocks.
 
+- multi-course selection for QCM and flashcard sessions;
+- Android system-bar insets exported to CSS so the app navigation sits above the OS navigation/gesture bar;
+- mind-map renderer verified and corrected for actual image widths, with load/error handling;
+- empty per-course methodology reminder slot ready for user-provided methods.
+
 ## Private corpus restoration
 
 The repository stays usable without private data: it starts with the seven subjects and no active private bank. To restore a matching private package locally:
 
 ```bash
-python3 tools/restore_private_bundle.py /path/to/AdaptiveStudy_v3.25.2_STANDALONE_CLEAN_SOURCE.zip
+python3 tools/restore_private_bundle.py /path/to/AdaptiveStudy_v3.25.3_STANDALONE_CLEAN_SOURCE.zip
 python3 -m http.server 8765 --directory local_instance/app
 ```
 
