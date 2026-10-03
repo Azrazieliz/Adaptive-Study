@@ -1,4 +1,4 @@
-window.__ADAPTIVE_BUILD='3.25.3-multicourse-native';
+window.__ADAPTIVE_BUILD='3.25.4-new-courses';
 
 (()=>{
 const C=window.APP_CONTENT||window.STUDY_CONTENT,KEY='adaptive-study-v22-state',DAY=86400000;
@@ -790,7 +790,7 @@ async function ensureReaderPage(path){
  try{
    const resp=await fetch(url,{cache:'reload'});
    if(resp&&resp.ok){
-     try{const c=await caches.open('adaptive-pages-v3-25-3-content');await c.put(url,resp.clone())}catch(_){}
+     try{const c=await caches.open('adaptive-pages-v3-25-4-content');await c.put(url,resp.clone())}catch(_){}
      return url;
    }
  }catch(_){}
@@ -870,7 +870,7 @@ async function cacheCoursePages(chid,show=true){
      const path=queue.shift(),url=readerPageUrl(path);
      try{
        const cached=await caches.match(url);
-       if(!cached){const resp=await fetch(url,{cache:'reload'});if(!resp.ok)throw new Error('HTTP');const c=await caches.open('adaptive-pages-v3-25-3-content');await c.put(url,resp.clone())}
+       if(!cached){const resp=await fetch(url,{cache:'reload'});if(!resp.ok)throw new Error('HTTP');const c=await caches.open('adaptive-pages-v3-25-4-content');await c.put(url,resp.clone())}
      }catch(e){failed++}
      done++;if(btn&&show)btn.textContent=`${done}/${pages.length}`;
    }
@@ -883,7 +883,7 @@ async function cacheCoursePages(chid,show=true){
 async function warmAllCoursePages(){
  // Keep startup light; full offline copies remain an explicit action in the reader.
  const all=Object.values(C.coursePages||{}).flatMap(pages=>pages.slice(0,1));if(!all.length)return;
- let cursor=0;const workers=Array.from({length:6},async()=>{while(cursor<all.length){const path=all[cursor++],url=readerPageUrl(path);try{if(!(await caches.match(url))){const r=await fetch(url,{cache:'reload'});if(r.ok){const c=await caches.open('adaptive-pages-v3-25-3-content');await c.put(url,r.clone())}}}catch(_){} }});
+ let cursor=0;const workers=Array.from({length:6},async()=>{while(cursor<all.length){const path=all[cursor++],url=readerPageUrl(path);try{if(!(await caches.match(url))){const r=await fetch(url,{cache:'reload'});if(r.ok){const c=await caches.open('adaptive-pages-v3-25-4-content');await c.put(url,r.clone())}}}catch(_){} }});
  await Promise.all(workers);
  try{localStorage.setItem('adaptive-study-course-cache-3243-content','ready')}catch(_){}
 }
