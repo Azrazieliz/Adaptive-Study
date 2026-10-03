@@ -1,2 +1,2 @@
-window.__EXERCISES_BUILD='3.25.1-standalone-autonomous';
-window.AdaptiveExercises={auditStatus:'PRIVATE_CORPUS_REQUIRED',version:'3.25.1-standalone-autonomous',documentQuestionsDisabled:true,counts:{phys:0,bio:0,biocell:0},generate(){return null}};
+window.__EXERCISES_BUILD='3.25.2-native-dense';
+window.AdaptiveExercises={auditStatus:'PRIVATE_CORPUS_REQUIRED',version:'3.25.2-native-dense',documentQuestionsDisabled:true,counts:{phys:0,bio:0,biocell:0},generate(){return null}};
