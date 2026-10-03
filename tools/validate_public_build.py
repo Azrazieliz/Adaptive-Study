@@ -12,6 +12,10 @@ chk(f"window.__ORIGINAL_CORPUS_BUILD='{EXPECTED}'" in oc,'original corpus build'
 chk('adaptive-study-v3-25-2-core' in sw and 'build=3252' in sw,'service worker build')
 prefix='window.STUDY_CONTENT = ';d=json.loads(ct[len(prefix):].strip().rstrip(';'))
 chk(d.get('pack',{}).get('version')==EXPECTED,'content build');chk(len(d.get('subjects',[]))==7,'subject count');chk(not d.get('questions'),'public questions must stay empty');chk(not d.get('flashcards'),'public flashcards must stay empty')
+chk('window.__ADAPTIVE_NATIVE' in idx and "get(\'native\')===\'1\'" in idx,'native mode marker')
+chk("!window.__ADAPTIVE_NATIVE&&'serviceWorker' in navigator" in idx,'native service worker guard')
+chk('essentialGuideSections' in app and 'course-essential' in app,'dense Essential renderer')
+chk('cardFrontText' in app and 'session-collapsed' in app,'compact flashcard renderer')
 if errors:
     print('FAILED:',', '.join(errors));sys.exit(1)
 print('OK',EXPECTED)
