@@ -62,6 +62,15 @@
 - Android system-bar insets must be respected so headers and bottom navigation are never clipped or hidden.
 - The in-app bottom navigation must sit above the Android OS navigation/gesture bar, not underneath it.
 
+## New course ingestion
+
+- When the user supplies a course together with QE, annales, training questions or corrections, integrate the course PDF as the factual authority and preserve the supplied question/correction pages as documentary originals.
+- New course pages must be readable in-app and source-linked.
+- Syntheses and flashcards must be derived only from verified course-page content; OCR residue or uncertain scan fragments must never become active study facts.
+- Derived questions must carry positive evidence for every true or false proposition and must remain autonomous.
+- Do not label a derived item as an original QE/annale question. Original scans stay separately traceable.
+- New course integration must update course inventory, source metadata, active-bank counts and release validation together.
+
 ## Release discipline
 
 - One coherent version identity across engine, content, exercises, original corpus and service-worker cache.
