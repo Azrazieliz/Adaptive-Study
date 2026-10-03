@@ -4,7 +4,7 @@ Public source for the **Adaptive Study v3.25.4** mobile/PWA engine.
 
 The public repository contains the application engine, mobile interface, offline/runtime logic and Android wrapper. The user-owned medical course PDFs, page images, compiled flashcards, QCM/QROC banks and documentary originals are intentionally **not published**.
 
-The validated private v3.25.4 package currently contains **31 active courses, 5,291 flashcards, 6,322 QCM + 420 QROC (6,742 active questions), 623 documentary original units and four Santé publique mind maps**. Those counts describe the private release, not a fresh public clone.
+The validated private v3.25.4 package currently contains **37 active courses, 5,635 flashcards, 7,822 QCM + 420 QROC (8,242 active questions), 969 documentary original units and the existing 7-course / 19-image mind-map pack**. Those counts describe the private release, not a fresh public clone.
 
 ## v3.25.4 changes
 
@@ -48,7 +48,7 @@ The public repository contains only the engine and course skeletons, not those p
 The repository stays usable without private data: it starts with the seven subjects and no active private bank. To restore a matching private package locally:
 
 ```bash
-python3 tools/restore_private_bundle.py /path/to/AdaptiveStudy_v3.25.4_STANDALONE_CLEAN_SOURCE.zip
+python3 tools/restore_private_bundle.py /path/to/AdaptiveStudy_v3.25.4_NEW_COURSES_SOURCE.zip
 python3 -m http.server 8765 --directory local_instance/app
 ```
 
@@ -69,4 +69,4 @@ See [`ADAPTIVE_STUDY_REQUIREMENTS.md`](ADAPTIVE_STUDY_REQUIREMENTS.md) for the f
 
 ## Autonomous study items
 
-Flashcards and questions must be understandable from the item itself. Source files and page numbers exist only for traceability and correction. A flashcard must name its chapter/topic explicitly; a question may rely on an attached figure/table only when that media is bundled with the same item. Phrases such as “according to the document/course/FC”, unresolved “this example/experiment/case”, and cross-question dependencies are rejected by release validation.
+Flashcards and questions must be understandable from the item itself. Source files and page numbers exist only for traceability and correction. A flashcard must contain enough natural subject context to be understandable on its own without mechanically prefixing the chapter name; a question may rely on an attached figure/table only when that media is bundled with the same item. Phrases such as “according to the document/course/FC”, unresolved “this example/experiment/case”, and cross-question dependencies are rejected by release validation.
