@@ -69,7 +69,7 @@ public class MainActivity extends Activity {
             });
 
             server = obtainServer(getAssets());
-            webView.loadUrl("http://127.0.0.1:" + server.getPort() + "/index.html?build=3243");
+            webView.loadUrl("http://127.0.0.1:" + server.getPort() + "/index.html?build=3250");
         } catch (Throwable e) {
             showStartupError(e);
         }
