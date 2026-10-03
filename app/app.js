@@ -1,4 +1,4 @@
-window.__ADAPTIVE_BUILD='3.25.2-native-dense';
+window.__ADAPTIVE_BUILD='3.25.3-multicourse-native';
 
 (()=>{
 const C=window.APP_CONTENT||window.STUDY_CONTENT,KEY='adaptive-study-v22-state',DAY=86400000;
@@ -127,13 +127,13 @@ function flashcardSource(c){
 }
 function knowledgeItems(sid='all',chid='all'){
  if((C.flashcards||[]).length){
-  return C.flashcards.filter(c=>(sid==='all'||c.subjectId===sid)&&(chid==='all'||c.chapterId===chid)).map(c=>({
+  return C.flashcards.filter(c=>(sid==='all'||c.subjectId===sid)&&chapterMatches(c.chapterId,chid)).map(c=>({
    id:c.id,subjectId:c.subjectId,chapterId:c.chapterId,conceptId:c.conceptId||c.id,
    term:c.question,answer:c.answer,source:flashcardSource(c),category:c.category||'flashcard',
    importance:c.priority===2?1.3:1,cardLevel:c.cardLevel||'detail'
   }));
  }
- return (C.facts||[]).filter(f=>(sid==='all'||f.subjectId===sid)&&(chid==='all'||f.chapterId===chid));
+ return (C.facts||[]).filter(f=>(sid==='all'||f.subjectId===sid)&&chapterMatches(f.chapterId,chid));
 }
 function tokens(s){return new Set(normTxt(s).split(/\s+/).filter(x=>x.length>=4&&!STOP.has(x)))}
 function courseSupportFor(q,answer){
@@ -205,7 +205,7 @@ function preloadNextMedia(){
 }
 
 function visualPool(sid,chid){
- return C.questions.filter(q=>q.media&&q.subjectId===sid&&(chid==='all'||q.chapterId===chid));
+ return C.questions.filter(q=>q.media&&q.subjectId===sid&&chapterMatches(q.chapterId,chid));
 }
 function runtimeRecovery(err){
  console.error(err);
@@ -343,21 +343,41 @@ function renderHome(){
 }
 function subOpts(){return C.subjects.map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join('')}
 function chapterOpts(sid,all=true){return (all?'<option value="all">Tous les chapitres actifs</option>':'')+C.chapters.filter(c=>c.subjectId===sid&&c.available).map(c=>`<option value="${c.id}">${c.id==='histo_conjonctifs'?'★ ':''}${esc(c.title)}${c.id==='histo_conjonctifs'?' — nouveau':''}</option>`).join('')}
+function activeChapters(sid='all'){return C.chapters.filter(c=>c.available&&(sid==='all'||c.subjectId===sid))}
+function chapterMatches(chapterId,filter){if(filter==='all'||filter==null)return true;const ids=Array.isArray(filter)?filter:[filter];return ids.includes(chapterId)}
+function chapterFilterIds(filter,sid='all'){const all=activeChapters(sid).map(c=>c.id);if(filter==='all'||filter==null)return all;return (Array.isArray(filter)?filter:[filter]).filter(id=>all.includes(id))}
+function courseMultiMarkup(id,sid='all',selected='all'){
+ const chapters=activeChapters(sid),chosen=new Set(selected==='all'?chapters.map(c=>c.id):(Array.isArray(selected)?selected:[selected]));
+ let body='';
+ const groups=sid==='all'?C.subjects.map(s=>({name:s.name,items:chapters.filter(c=>c.subjectId===s.id)})).filter(g=>g.items.length):[{name:null,items:chapters}];
+ groups.forEach(g=>{body+=g.name?`<div class="course-multi-group">${esc(g.name)}</div>`:'';body+=g.items.map(c=>`<label class="course-multi-item"><input type="checkbox" data-course-id="${c.id}" ${chosen.has(c.id)?'checked':''}><span>${esc(c.title)}</span></label>`).join('')});
+ return `<details id="${id}" class="course-multi"><summary class="field course-multi-summary"><span data-course-multi-label></span><span class="course-multi-arrow">⌄</span></summary><div class="course-multi-panel"><div class="course-multi-actions"><button type="button" class="btn ghost compact" data-course-all>Tout</button><button type="button" class="btn ghost compact" data-course-none>Aucun</button></div><div class="course-multi-list">${body||'<div class="empty compact">Aucun cours actif</div>'}</div></div></details>`
+}
+function bindCourseMulti(id,onChange){
+ const root=$(id);if(!root)return;const boxes=()=>[...root.querySelectorAll('input[data-course-id]')],label=root.querySelector('[data-course-multi-label]');
+ const update=()=>{const all=boxes(),n=all.filter(x=>x.checked).length;label.textContent=n===all.length&&n?`Tous les cours (${n})`:n?`${n} cours sélectionné${n>1?'s':''}`:'Aucun cours';if(onChange)onChange()};
+ root.querySelector('[data-course-all]')?.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();boxes().forEach(x=>x.checked=true);update()});
+ root.querySelector('[data-course-none]')?.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();boxes().forEach(x=>x.checked=false);update()});
+ boxes().forEach(x=>x.onchange=update);update()
+}
+function courseFilterFrom(id){const root=$(id);if(!root)return'all';const all=[...root.querySelectorAll('input[data-course-id]')],ids=all.filter(x=>x.checked).map(x=>x.dataset.courseId);return ids.length===all.length&&ids.length?'all':ids}
+function setCourseFilter(id,filter){const root=$(id);if(!root)return;const all=[...root.querySelectorAll('input[data-course-id]')],ids=new Set(filter==='all'?all.map(x=>x.dataset.courseId):(Array.isArray(filter)?filter:[filter]));all.forEach(x=>x.checked=ids.has(x.dataset.courseId));const first=all[0];if(first)first.dispatchEvent(new Event('change'))}
 function renderQuizSetup(){
  if(session)return renderQuestion();
- $('quizContent').innerHTML=`<div class="card quiz-setup-card"><div class="section-title"><h2 class="grow">Entraînement</h2><span class="badge accent">adaptatif</span></div><div class="quiz-setup-grid"><label><span class="lbl">Matière</span><select id="qSub" class="field">${subOpts()}</select></label><label><span class="lbl">Cours</span><select id="qCh" class="field"></select></label><label><span class="lbl">Nombre</span><select id="qCount" class="field"><option>10</option><option selected>20</option><option>30</option><option>50</option></select></label></div><div id="qStats" class="callout compact-note" style="margin-top:10px"></div><div class="mode-grid"><button class="btn primary" id="qAdaptive"><b>Adaptatif</b><span>erreurs + lenteur + maîtrise</span></button><button class="btn soft" id="qFormat"><b>Format concours</b><span>dossiers/questions liés</span></button><button class="btn soft" id="qExercise"><b>Dossier d’exercice</b><span>Physique · Biochimie · Bio cell</span></button><button class="btn" id="qBank"><b>Banque dérivée</b><span>questions sourcées</span></button><button class="btn" id="qTraining"><b>Entraînement isolé</b><span>QE / entraînements</span></button><button class="btn" id="qOriginal"><b>Originaux PDF</b><span>sujet + corrigé</span></button></div></div>`;
- const s=$('qSub'),c=$('qCh'),cnt=$('qCount'),stats=$('qStats'),fmt=$('qFormat'),tr=$('qTraining'),ex=$('qExercise');
- const upd=()=>{c.innerHTML=chapterOpts(s.value,false);refresh()};
- const refresh=()=>{const sid=s.value,chid=c.value||'all',all=bankPool(sid,chid),der=derivedPool(sid,chid),qr=qrocPool(sid,chid),linked=linkedExamPool(sid,chid),train=trainingPool(sid,chid),orig=(window.ORIGINAL_CORPUS||[]).filter(q=>q.chapterId===chid).length,exCount=window.AdaptiveExercises?.counts?.[sid]||0;stats.innerHTML=`<b>${all.length}</b> actives · ${der.length} dérivées · ${qr.length} QROC · ${linked.length} liées concours · ${train.length} entraînement · ${orig} originaux`;fmt.textContent=sid==='shs'?'QROC — format concours':linked.length?'Format concours lié':'Format concours indisponible';fmt.disabled=sid!=='shs'&&!linked.length;tr.disabled=!train.length;ex.disabled=!exCount;ex.querySelector('span').textContent=exCount?`${exCount} dossier(s) multiquestions disponibles`:'Aucun dossier validé pour cette matière'};
- s.onchange=upd;c.onchange=refresh;upd();
- const go=mode=>startSession(s.value,c.value,mode,Number(cnt.value||20));
- $('qAdaptive').onclick=()=>go(s.value==='shs'?'qroc':'adaptive');$('qBank').onclick=()=>go(s.value==='shs'?'qroc':'bank');$('qFormat').onclick=()=>go(s.value==='shs'?'qroc':'exam');$('qTraining').onclick=()=>go('training');$('qOriginal').onclick=()=>openOriginalCourse(c.value);$('qExercise').onclick=()=>startExercise(s.value)
+ $('quizContent').innerHTML=`<div class="card quiz-setup-card"><div class="section-title"><h2 class="grow">Entraînement</h2><span class="badge accent">adaptatif</span></div><div class="quiz-setup-grid"><label><span class="lbl">Matière</span><select id="qSub" class="field">${subOpts()}</select></label><label class="course-multi-label"><span class="lbl">Cours</span><div id="qCoursesWrap"></div></label><label><span class="lbl">Nombre</span><select id="qCount" class="field"><option>10</option><option selected>20</option><option>30</option><option>50</option></select></label></div><div id="qStats" class="callout compact-note" style="margin-top:10px"></div><div class="mode-grid"><button class="btn primary" id="qAdaptive"><b>Adaptatif</b><span>erreurs + lenteur + maîtrise</span></button><button class="btn soft" id="qFormat"><b>Format concours</b><span>dossiers/questions liés</span></button><button class="btn soft" id="qExercise"><b>Dossier d’exercice</b><span>Physique · Biochimie · Bio cell</span></button><button class="btn" id="qBank"><b>Banque dérivée</b><span>questions sourcées</span></button><button class="btn" id="qTraining"><b>Entraînement isolé</b><span>QE / entraînements</span></button><button class="btn" id="qOriginal"><b>Originaux PDF</b><span>sujet + corrigé</span></button></div></div>`;
+ const s=$('qSub'),wrap=$('qCoursesWrap'),cnt=$('qCount'),stats=$('qStats'),fmt=$('qFormat'),tr=$('qTraining'),ex=$('qExercise'),origBtn=$('qOriginal'),adaptive=$('qAdaptive'),bank=$('qBank');
+ const selected=()=>courseFilterFrom('qCourses');
+ const refresh=()=>{const sid=s.value,chid=selected(),all=bankPool(sid,chid),der=derivedPool(sid,chid),qr=qrocPool(sid,chid),linked=linkedExamPool(sid,chid),train=trainingPool(sid,chid),ids=chapterFilterIds(chid,sid),orig=(window.ORIGINAL_CORPUS||[]).filter(q=>ids.includes(q.chapterId)).length,exCount=window.AdaptiveExercises?.counts?.[sid]||0;stats.innerHTML=`<b>${all.length}</b> actives · ${der.length} dérivées · ${qr.length} QROC · ${linked.length} liées concours · ${train.length} entraînement · ${orig} originaux · <b>${ids.length}</b> cours`;fmt.textContent=sid==='shs'?'QROC — format concours':linked.length?'Format concours lié':'Format concours indisponible';fmt.disabled=sid==='shs'?!qr.length:!linked.length;tr.disabled=!train.length;adaptive.disabled=!all.length;bank.disabled=sid==='shs'?!qr.length:!der.length;ex.disabled=!exCount;ex.querySelector('span').textContent=exCount?`${exCount} dossier(s) multiquestions disponibles`:'Aucun dossier validé pour cette matière';origBtn.disabled=ids.length!==1||!orig;origBtn.querySelector('span').textContent=ids.length===1?'sujet + corrigé':'sélectionner 1 cours'};
+ const rebuild=(initial='all')=>{wrap.innerHTML=courseMultiMarkup('qCourses',s.value,initial);bindCourseMulti('qCourses',refresh);refresh()};
+ s.onchange=()=>rebuild('all');rebuild('all');
+ const go=mode=>startSession(s.value,selected(),mode,Number(cnt.value||20));
+ $('qAdaptive').onclick=()=>go(s.value==='shs'?'qroc':'adaptive');$('qBank').onclick=()=>go(s.value==='shs'?'qroc':'bank');$('qFormat').onclick=()=>go(s.value==='shs'?'qroc':'exam');$('qTraining').onclick=()=>go('training');$('qOriginal').onclick=()=>{const ids=chapterFilterIds(selected(),s.value);if(ids.length!==1)return toast('Sélectionne un seul cours pour parcourir ses originaux PDF.');openOriginalCourse(ids[0])};$('qExercise').onclick=()=>startExercise(s.value)
 }
-function openQuizFor(sid,chid){nav('quiz');setTimeout(()=>{if(!$('qSub'))return;$('qSub').value=sid;$('qSub').dispatchEvent(new Event('change'));$('qCh').value=chid},0)}
+function openQuizFor(sid,chid){nav('quiz');setTimeout(()=>{if(!$('qSub'))return;$('qSub').value=sid;$('qSub').dispatchEvent(new Event('change'));setCourseFilter('qCourses',chid==='all'?'all':[chid])},0)}
 function openCourseFor(chid){const c=chs[chid];if(!c)return;nav('course');setTimeout(()=>{if(!$('sumSub'))return;$('sumSub').value=c.subjectId;$('sumSub').dispatchEvent(new Event('change'));$('sumCh').value=chid;$('sumCh').dispatchEvent(new Event('change'))},0)}
 
 function cleanTerm(t){return t.replace(/[?]+$/,'').replace(/^(Que|Qu'|Quel|Quelle|Quels|Quelles|Pourquoi|Comment|À quoi|Où|De quoi)\s+/i,'').trim()}
-function factsFor(sid,chid){return C.facts.filter(f=>f.subjectId===sid&&(chid==='all'||f.chapterId===chid))}
+function factsFor(sid,chid){return C.facts.filter(f=>f.subjectId===sid&&chapterMatches(f.chapterId,chid))}
 function distractorFacts(f,limit=8){let arr=C.facts.filter(x=>x.id!==f.id&&x.chapterId===f.chapterId&&x.category===f.category);if(arr.length<3)arr=C.facts.filter(x=>x.id!==f.id&&x.chapterId===f.chapterId);if(arr.length<3)arr=C.facts.filter(x=>x.id!==f.id&&x.subjectId===f.subjectId);return shuffle(arr).slice(0,limit)}
 function remember(sig){S.seenGenerated=S.seenGenerated||[];S.seenGenerated.push(sig);if(S.seenGenerated.length>500)S.seenGenerated=S.seenGenerated.slice(-350)}
 function pickVariant(f){
@@ -394,7 +414,7 @@ function sequenceQuestion(f){
 function QBase(f,stem,options,correct,format,sig){return{id:'gen_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),subjectId:f.subjectId,chapterId:f.chapterId,conceptId:f.conceptId,format,stem,options,correct,explanation:f.answer,source:f.source,difficulty:1,provenance:'GENERATED_RUNTIME',timeTargetSec:60,signature:sig}}
 function fromFact(f){const v=pickVariant(f);return v==='reverse'?reverseQuestion(f):v==='sequence'?sequenceQuestion(f):directQuestion(f)}
 
-function entitiesFor(sid,chid){return (C.entities||[]).filter(e=>e.subjectId===sid&&(chid==='all'||e.chapterId===chid))}
+function entitiesFor(sid,chid){return (C.entities||[]).filter(e=>e.subjectId===sid&&chapterMatches(e.chapterId,chid))}
 function entityQCM(sid,chid){
  const pool=entitiesFor(sid,chid);if(!pool.length)return null;
  const e=shuffle(pool)[0],same=(C.entities||[]).filter(x=>x.entityType===e.entityType&&x.id!==e.id),props=shuffle(e.properties||[]);
@@ -421,7 +441,7 @@ function generatedQCM(sid,chid){
  return{id:'qcm_'+Date.now(),subjectId:sid,chapterId:anchor.chapterId,conceptId:anchor.conceptId||('qcm_'+(chid==='all'?sid:chid)),format:'QCM',stem:`Concernant ${chapterTitle}, quelle(s) proposition(s) est/sont exacte(s) ?`,options,correct,optionRationales,explanation:'Les propositions sont construites à partir de points de cours proches afin d’éviter les QCM artificiellement hétérogènes.',source:{kind:'Génération locale sourcée',title:chapterTitle},difficulty:3,provenance:'GENERATED_RUNTIME',timeTargetSec:90,signature:sig}
 }
 function numericQuestion(sid,chid){
- const gs=C.generators.filter(g=>g.subjectId===sid&&(chid==='all'||g.chapterId===chid));if(!gs.length)return null;const g=shuffle(gs)[0],rnd=(a,b,st=1)=>Math.round((a+Math.random()*(b-a))/st)*st;
+ const gs=C.generators.filter(g=>g.subjectId===sid&&chapterMatches(g.chapterId,chid));if(!gs.length)return null;const g=shuffle(gs)[0],rnd=(a,b,st=1)=>Math.round((a+Math.random()*(b-a))/st)*st;
  if(g.handler==='bio_mass_aa'){const n=rnd(80,900,10),ans=n*110/1000;return{id:'num'+Date.now(),subjectId:sid,chapterId:g.chapterId,conceptId:g.conceptId,format:'NUMERIC',stem:`Une protéine contient ${n} acides aminés. En utilisant l’approximation du cours (110 Da par AA), estimer sa masse moléculaire.`,numericAnswer:ans,tolerance:.015,unit:'kDa',explanation:`${n} × 110 Da = ${n*110} Da = ${ans.toFixed(1)} kDa.`,source:g.source,difficulty:2,provenance:'GENERATED_RUNTIME',timeTargetSec:70}}
  if(g.handler==='phys_delta_epg'){const m=rnd(50,90,5),dz=rnd(5,40,5),ans=m*9.81*dz;return{id:'num'+Date.now(),subjectId:sid,chapterId:g.chapterId,conceptId:g.conceptId,format:'NUMERIC',stem:`Une masse de ${m} kg s’élève de ${dz} m. Calculer la variation d’énergie potentielle de pesanteur avec g = 9,81 m·s⁻².`,numericAnswer:ans,tolerance:.015,unit:'J',explanation:`ΔEp = mgΔz ≈ ${ans.toFixed(0)} J.`,source:g.source,difficulty:2,provenance:'GENERATED_RUNTIME',timeTargetSec:90}}
  if(g.handler==='phys_ec'){const m=rnd(200,800,50)/1000,v=rnd(2,12,1),ans=.5*m*v*v;return{id:'num'+Date.now(),subjectId:sid,chapterId:g.chapterId,conceptId:g.conceptId,format:'NUMERIC',stem:`Un objet de masse ${m.toFixed(2).replace('.',',')} kg possède une vitesse de ${v} m·s⁻¹. Calculer son énergie cinétique.`,numericAnswer:ans,tolerance:.02,unit:'J',explanation:`Ec = 1/2 mv² ≈ ${ans.toFixed(2)} J.`,source:g.source,difficulty:2,provenance:'GENERATED_RUNTIME',timeTargetSec:90}}
@@ -438,7 +458,7 @@ function questionPriority(q){
  const st=S.concepts[q.subjectId+':'+q.conceptId],m=mastery(st),wrong=clamp((st?.wrongStreak||0)/2,0,1),slow=clamp(((st?.timeRatioEMA||1)-1)/.55,0,1);
  return .5*(1-m)+.28*wrong+.18*slow+.04*Math.random();
 }
-function bankPool(sid,chid){return C.questions.filter(q=>q.subjectId===sid&&(chid==='all'||q.chapterId===chid))}
+function bankPool(sid,chid){return C.questions.filter(q=>q.subjectId===sid&&chapterMatches(q.chapterId,chid))}
 function derivedPool(sid,chid){return bankPool(sid,chid).filter(q=>{const p=String(q.provenance||'');return p.startsWith('DERIVED_PDF')||p.startsWith('PDF_DERIVED')||p==='DERIVED_ANNAL'})}
 function trainingPool(sid,chid){return derivedPool(sid,chid).filter(q=>/TRAINING/.test(String(q.provenance||''))||q.exerciseMode==='TRAINING_ISOLATED')}
 function linkedExamPool(sid,chid){return bankPool(sid,chid).filter(q=>q.exerciseMode==='EXAM_LINKED'&&q.exerciseGroupId)}
@@ -447,7 +467,7 @@ function annalPool(sid,chid){return bankPool(sid,chid).filter(q=>q.provenance===
 function originalPool(sid,chid){return bankPool(sid,chid)}
 function qrocPool(sid,chid){
  return C.questions
-  .filter(q=>q.format==='QROC'&&q.subjectId===sid&&(chid==='all'||q.chapterId===chid))
+  .filter(q=>q.format==='QROC'&&q.subjectId===sid&&chapterMatches(q.chapterId,chid))
   .sort((a,b)=>{
     const pa=a.trainingPriority==='prioritaire'?1:0,pb=b.trainingPriority==='prioritaire'?1:0;
     if(pa!==pb)return pb-pa;
@@ -603,7 +623,7 @@ function sequenceMicroCards(f){
  return cards;
 }
 function qrocFlashcards(sid,chid){
- const out=[];C.questions.filter(q=>q.format==='QROC'&&(sid==='all'||q.subjectId===sid)&&(chid==='all'||q.chapterId===chid)).forEach(q=>{const pts=q.expectedPoints||[];if(!pts.length)return;out.push({id:`qroc:${q.id}`,front:q.stem,back:pts.map((p,i)=>`${i+1}. ${p}`).join('\n'),subjectId:q.subjectId,chapterId:q.chapterId,conceptId:q.conceptId,source:q.source,kind:'QROC',importance:q.trainingPriority==='prioritaire'?1.35:1.15});pts.forEach((p,i)=>{const m=String(p).match(/^([^:]{3,65})\s*:\s*(.+)$/);if(!m)return;out.push({id:`qrocp:${q.id}:${i}`,front:`Dans la QROC « ${cleanTopic(q.stem)} », que faut-il mentionner à propos de « ${m[1].trim()} » ?`,back:m[2].trim(),subjectId:q.subjectId,chapterId:q.chapterId,conceptId:q.conceptId,source:q.source,kind:'QROC — point attendu',importance:q.trainingPriority==='prioritaire'?1.3:1.1})})});return out;
+ const out=[];C.questions.filter(q=>q.format==='QROC'&&(sid==='all'||q.subjectId===sid)&&chapterMatches(q.chapterId,chid)).forEach(q=>{const pts=q.expectedPoints||[];if(!pts.length)return;out.push({id:`qroc:${q.id}`,front:q.stem,back:pts.map((p,i)=>`${i+1}. ${p}`).join('\n'),subjectId:q.subjectId,chapterId:q.chapterId,conceptId:q.conceptId,source:q.source,kind:'QROC',importance:q.trainingPriority==='prioritaire'?1.35:1.15});pts.forEach((p,i)=>{const m=String(p).match(/^([^:]{3,65})\s*:\s*(.+)$/);if(!m)return;out.push({id:`qrocp:${q.id}:${i}`,front:`Dans la QROC « ${cleanTopic(q.stem)} », que faut-il mentionner à propos de « ${m[1].trim()} » ?`,back:m[2].trim(),subjectId:q.subjectId,chapterId:q.chapterId,conceptId:q.conceptId,source:q.source,kind:'QROC — point attendu',importance:q.trainingPriority==='prioritaire'?1.3:1.1})})});return out;
 }
 function cardKindForFact(f){const names={definition:'Définition',rule:'Règle',formula:'Formule',number:'Valeur',mapping:'Association',sequence:'Séquence',algorithm:'Méthode',trend:'Évolution',list:'Liste',explanation:'Compréhension',example:'Exemple',trap:'Piège / nuance',flashcard:'Notion-clé'};return names[f.category]||'Cours'}
 function explicitFlashcardKind(c){
@@ -611,28 +631,32 @@ function explicitFlashcardKind(c){
  return names[c.category]||'Cours';
 }
 function cardPool(sid='all',chid='all'){
- let arr=(C.flashcards||[]).filter(c=>(sid==='all'||c.subjectId===sid)&&(chid==='all'||c.chapterId===chid)).map(c=>({
+ let arr=(C.flashcards||[]).filter(c=>(sid==='all'||c.subjectId===sid)&&chapterMatches(c.chapterId,chid)).map(c=>({
    id:c.id,front:c.question,back:c.answer,subjectId:c.subjectId,chapterId:c.chapterId,conceptId:c.conceptId||'',source:flashcardSource(c),kind:explicitFlashcardKind(c),importance:c.priority===2?1.3:1,category:c.category,cardLevel:c.cardLevel||'detail'
  }));
  // Fallback legacy uniquement si aucune banque explicite n'existe dans ce build.
  if(!(C.flashcards||[]).length){
    const reverseCats=new Set();
-   C.facts.filter(f=>(sid==='all'||f.subjectId===sid)&&(chid==='all'||f.chapterId===chid)).forEach(f=>{arr.push({id:'f:'+f.id,front:naturalFactFront(f),back:f.answer,subjectId:f.subjectId,chapterId:f.chapterId,conceptId:f.conceptId,source:f.source,kind:cardKindForFact(f),importance:f.importance||1,category:f.category});if(reverseCats.has(f.category)){const rf=naturalReverseFront(f);if(rf)arr.push({id:'fr:'+f.id,front:rf,back:f.term,subjectId:f.subjectId,chapterId:f.chapterId,conceptId:f.conceptId,source:f.source,kind:'Rappel inversé',importance:f.importance||1,category:f.category})}arr.push(...sequenceMicroCards(f))});
-   (C.entities||[]).filter(e=>(sid==='all'||e.subjectId===sid)&&(chid==='all'||e.chapterId===chid)).forEach(e=>(e.properties||[]).forEach((p,i)=>{const label=String(p.label||'propriété').trim(),val=String(p.value||'').trim();const l=label.toLowerCase();let front;if(l==='usage')front=`Quel est l’usage principal de ${e.name} ?`;else if(l.includes('principe'))front=`Quel est le principe de ${e.name} ?`;else if(l.includes('mesure'))front=`Que mesure ${e.name} ?`;else if(l.includes('localisation'))front=`Où se situe ${e.name} ?`;else if(l.includes('fonction')||l.includes('rôle'))front=`Quel est le rôle de ${e.name} ?`;else front=`Pour ${e.name}, que faut-il retenir concernant « ${label} » ?`;arr.push({id:`ep:${e.id}:${i}`,front,back:val,subjectId:e.subjectId,chapterId:e.chapterId,conceptId:`entity:${e.id}`,source:e.source,kind:'Comparaison',importance:p.importance||1})}));
+   C.facts.filter(f=>(sid==='all'||f.subjectId===sid)&&chapterMatches(f.chapterId,chid)).forEach(f=>{arr.push({id:'f:'+f.id,front:naturalFactFront(f),back:f.answer,subjectId:f.subjectId,chapterId:f.chapterId,conceptId:f.conceptId,source:f.source,kind:cardKindForFact(f),importance:f.importance||1,category:f.category});if(reverseCats.has(f.category)){const rf=naturalReverseFront(f);if(rf)arr.push({id:'fr:'+f.id,front:rf,back:f.term,subjectId:f.subjectId,chapterId:f.chapterId,conceptId:f.conceptId,source:f.source,kind:'Rappel inversé',importance:f.importance||1,category:f.category})}arr.push(...sequenceMicroCards(f))});
+   (C.entities||[]).filter(e=>(sid==='all'||e.subjectId===sid)&&chapterMatches(e.chapterId,chid)).forEach(e=>(e.properties||[]).forEach((p,i)=>{const label=String(p.label||'propriété').trim(),val=String(p.value||'').trim();const l=label.toLowerCase();let front;if(l==='usage')front=`Quel est l’usage principal de ${e.name} ?`;else if(l.includes('principe'))front=`Quel est le principe de ${e.name} ?`;else if(l.includes('mesure'))front=`Que mesure ${e.name} ?`;else if(l.includes('localisation'))front=`Où se situe ${e.name} ?`;else if(l.includes('fonction')||l.includes('rôle'))front=`Quel est le rôle de ${e.name} ?`;else front=`Pour ${e.name}, que faut-il retenir concernant « ${label} » ?`;arr.push({id:`ep:${e.id}:${i}`,front,back:val,subjectId:e.subjectId,chapterId:e.chapterId,conceptId:`entity:${e.id}`,source:e.source,kind:'Comparaison',importance:p.importance||1})}));
    arr.push(...qrocFlashcards(sid,chid));
  }
- Object.entries(S.cards).forEach(([id,c])=>{if(c.custom&&(sid==='all'||c.subjectId===sid)&&(chid==='all'||c.chapterId===chid))arr.push({id,front:c.front,back:c.back,subjectId:c.subjectId,chapterId:c.chapterId,conceptId:c.conceptId||'',source:c.source,kind:'Erreur personnelle',importance:1.4})});
+ Object.entries(S.cards).forEach(([id,c])=>{if(c.custom&&(sid==='all'||c.subjectId===sid)&&chapterMatches(c.chapterId,chid))arr.push({id,front:c.front,back:c.back,subjectId:c.subjectId,chapterId:c.chapterId,conceptId:c.conceptId||'',source:c.source,kind:'Erreur personnelle',importance:1.4})});
  const seenId=new Set(),seenContent=new Set(),seenFront=new Set();return arr.filter(x=>{const nf=normTxt(x.front),ck=nf+'|'+normTxt(x.back);if(seenId.has(x.id)||seenContent.has(ck)||seenFront.has(nf))return false;seenId.add(x.id);seenContent.add(ck);seenFront.add(nf);return true});
 }
 function cardPriority(c){const st=c.conceptId?S.concepts[c.subjectId+':'+c.conceptId]:null,m=mastery(st),wrong=clamp((st?.wrongStreak||0)/2,0,1),slow=clamp(((st?.timeRatioEMA||1)-1)/.55,0,1),due=S.cards[c.id]?.due&&S.cards[c.id].due<=now()?1:0,unseen=!(S.cards[c.id]?.reps>0)?1:0,kindBoost=/Erreur|Piège|Méthode|QROC|Règle/i.test(c.kind||'')?.12:0;return .38*(1-m)+.22*wrong+.16*slow+.10*due+.06*unseen+.05*clamp((c.importance||1)-1,0,.5)+kindBoost+.03*Math.random()}
 function renderCards(){
  const total=cardPool('all','all').length,due=dueCount(),fresh=newCardCount();
- $('cardsContent').innerHTML=`<div class="grid flash-layout"><div class="card c4" id="cardSetup"><div class="section-title"><h2 class="grow">Flashcards</h2><span class="badge accent">${total}</span></div><div class="flash-stats compact"><span><b>${due}</b> dues</span><span><b>${fresh}</b> nouvelles</span></div><div class="flash-setup-grid"><label class="lbl">Matière<select id="cardSub" class="field"><option value="all">Toutes les matières</option>${subOpts()}</select></label><label class="lbl">Chapitre<select id="cardCh" class="field"><option value="all">Tous les chapitres</option></select></label><label class="lbl">Cartes<select id="cardCount" class="field"><option>20</option><option selected>50</option><option>100</option><option>200</option></select></label></div><div class="card-mode-grid"><button id="cardDue" class="btn primary">Dues</button><button id="cardTarget" class="btn soft">Faiblesses</button><button id="cardNew" class="btn">Nouvelles</button><button id="cardRandom" class="btn">Libre</button></div></div><div class="card c8" id="cardBox"><div class="section-title"><h2 class="grow">Récupération active</h2><span class="badge">Q ↔ R</span></div><div class="callout ok"><b>${(C.flashcards||[]).length} cartes de cours</b><div class="small">Les questions sont autonomes ; matière, chapitre et source restent des métadonnées séparées.</div></div><div class="small" style="margin-top:7px">« Faiblesses » priorise erreurs répétées, lenteur et faible maîtrise.</div></div></div>`;
- const sub=$('cardSub'),ch=$('cardCh'),upd=()=>{if(sub.value==='all'){ch.innerHTML='<option value="all">Tous les chapitres</option>';ch.disabled=true}else{ch.disabled=false;ch.innerHTML=chapterOpts(sub.value,true)}};sub.onchange=upd;upd();$('cardDue').onclick=()=>startCards('due');$('cardTarget').onclick=()=>startCards('target');$('cardNew').onclick=()=>startCards('new');$('cardRandom').onclick=()=>startCards('free');
+ $('cardsContent').innerHTML=`<div class="grid flash-layout"><div class="card c4" id="cardSetup"><div class="section-title"><h2 class="grow">Flashcards</h2><span class="badge accent">${total}</span></div><div class="flash-stats compact"><span><b id="cardDueCount">${due}</b> dues</span><span><b id="cardFreshCount">${fresh}</b> nouvelles</span><span><b id="cardPoolCount">${total}</b> sélection</span></div><div class="flash-setup-grid"><label class="lbl">Matière<select id="cardSub" class="field"><option value="all">Toutes les matières</option>${subOpts()}</select></label><label class="lbl course-multi-label">Cours<div id="cardCoursesWrap"></div></label><label class="lbl">Cartes<select id="cardCount" class="field"><option>20</option><option selected>50</option><option>100</option><option>200</option></select></label></div><div class="card-mode-grid"><button id="cardDue" class="btn primary">Dues</button><button id="cardTarget" class="btn soft">Faiblesses</button><button id="cardNew" class="btn">Nouvelles</button><button id="cardRandom" class="btn">Libre</button></div></div><div class="card c8" id="cardBox"><div class="section-title"><h2 class="grow">Récupération active</h2><span class="badge">Q ↔ R</span></div><div class="callout ok"><b>${(C.flashcards||[]).length} cartes de cours</b><div class="small">Sélectionne une matière puis un ou plusieurs cours. Les cartes restent autonomes ; les sources sont des métadonnées de traçabilité.</div></div><div class="small" style="margin-top:7px">« Faiblesses » priorise erreurs répétées, lenteur et faible maîtrise.</div></div></div>`;
+ const sub=$('cardSub'),wrap=$('cardCoursesWrap');
+ const selected=()=>courseFilterFrom('cardCourses');
+ const refresh=()=>{const sid=sub.value,chid=selected(),pool=cardPool(sid,chid),d=dueCount(sid,chid),f=newCardCount(sid,chid);if($('cardPoolCount'))$('cardPoolCount').textContent=pool.length;if($('cardDueCount'))$('cardDueCount').textContent=d;if($('cardFreshCount'))$('cardFreshCount').textContent=f;$('cardDue').disabled=!d;$('cardNew').disabled=!f;$('cardTarget').disabled=!pool.length;$('cardRandom').disabled=!pool.length};
+ const rebuild=(initial='all')=>{wrap.innerHTML=courseMultiMarkup('cardCourses',sub.value,initial);bindCourseMulti('cardCourses',refresh);refresh()};
+ sub.onchange=()=>rebuild('all');rebuild('all');$('cardDue').onclick=()=>startCards('due');$('cardTarget').onclick=()=>startCards('target');$('cardNew').onclick=()=>startCards('new');$('cardRandom').onclick=()=>startCards('free');
 }
 function collapseCardSetup(collapsed=true){const setup=$('cardSetup'),box=$('cardBox');if(!setup||!box)return;setup.classList.toggle('session-collapsed',collapsed);box.classList.toggle('c12',collapsed);box.classList.toggle('c8',!collapsed)}
 function cardFrontText(c){let q=String(c?.front||'').trim(),title=chs[c?.chapterId]?.title||'';if(title&&q.startsWith(title+' — '))q=q.slice(title.length+3).trim();return q}
-function startCards(mode='target'){const sid=$('cardSub')?.value||'all',chid=$('cardCh')?.value||'all',n=Number($('cardCount')?.value||50);let pool=cardPool(sid,chid);if(mode==='due')pool=pool.filter(c=>S.cards[c.id]?.reps>0&&S.cards[c.id]?.due<=now()).sort((a,b)=>cardPriority(b)-cardPriority(a));else if(mode==='new')pool=pool.filter(c=>!(S.cards[c.id]?.reps>0)).sort((a,b)=>cardPriority(b)-cardPriority(a));else if(mode==='target')pool=pool.sort((a,b)=>cardPriority(b)-cardPriority(a));else pool=shuffle(pool);review={pool:pool.slice(0,n),i:0,side:'front',revealed:false};collapseCardSetup(true);showCard()}
+function startCards(mode='target'){const sid=$('cardSub')?.value||'all',chid=courseFilterFrom('cardCourses'),n=Number($('cardCount')?.value||50);let pool=cardPool(sid,chid);if(mode==='due')pool=pool.filter(c=>S.cards[c.id]?.reps>0&&S.cards[c.id]?.due<=now()).sort((a,b)=>cardPriority(b)-cardPriority(a));else if(mode==='new')pool=pool.filter(c=>!(S.cards[c.id]?.reps>0)).sort((a,b)=>cardPriority(b)-cardPriority(a));else if(mode==='target')pool=pool.sort((a,b)=>cardPriority(b)-cardPriority(a));else pool=shuffle(pool);review={pool:pool.slice(0,n),i:0,side:'front',revealed:false};collapseCardSetup(true);showCard()}
 function startChapterCards(chid,n=50){const c=chs[chid];if(!c)return;nav('cards');setTimeout(()=>{let pool=cardPool(c.subjectId,chid).sort((a,b)=>cardPriority(b)-cardPriority(a));review={pool:pool.slice(0,n),i:0,side:'front',revealed:false};collapseCardSetup(true);showCard()},0)}
 function showCard(){
  const box=$('cardBox');
@@ -766,7 +790,7 @@ async function ensureReaderPage(path){
  try{
    const resp=await fetch(url,{cache:'reload'});
    if(resp&&resp.ok){
-     try{const c=await caches.open('adaptive-pages-v3-25-2-content');await c.put(url,resp.clone())}catch(_){}
+     try{const c=await caches.open('adaptive-pages-v3-25-3-content');await c.put(url,resp.clone())}catch(_){}
      return url;
    }
  }catch(_){}
@@ -805,13 +829,16 @@ function openMindMap(chid){
  closeMindMap();
  const maps=[{title:m.title,path:m.path},...(Array.isArray(m.subMaps)?m.subMaps:[])].filter(x=>x&&x.path),overlay=document.createElement('div');let active=0;
  overlay.id='mindMapOverlay';overlay.className='mindmap-overlay';
- overlay.innerHTML=`<div class="mindmap-top"><button id="mindMapClose" class="btn ghost compact">← Retour au cours</button><div class="grow"><b id="mindMapTitle">${esc(maps[0].title)}</b><div class="small">Carte mentale paysage · zoom et déplacement${maps.length>1?' · '+maps.length+' vues':''}</div></div><button id="mindMapLandscape" class="btn soft compact">↔ Paysage</button><span id="mindMapZoomLabel" class="badge">100%</span></div>${maps.length>1?`<div class="mindmap-pages">${maps.map((x,i)=>`<button class="btn ${i===0?'primary':'soft'} compact" data-mindmap-page="${i}">${i===0?'Vue globale':'Sous-carte '+i}</button>`).join('')}</div>`:''}<div class="mindmap-tools"><button id="mindMapMinus" class="btn">−</button><input id="mindMapZoom" type="range" min="25" max="240" value="100" step="10"><button id="mindMapPlus" class="btn">+</button><button id="mindMapFit" class="btn soft">Ajuster</button></div><div id="mindMapCanvas" class="mindmap-canvas"><img id="mindMapImage" src="./${maps[0].path}" alt="Carte mentale ${esc(maps[0].title)}"></div>`;
+ overlay.innerHTML=`<div class="mindmap-top"><button id="mindMapClose" class="btn ghost compact">← Retour au cours</button><div class="grow"><b id="mindMapTitle">${esc(maps[0].title)}</b><div class="small">Carte mentale paysage · zoom et déplacement${maps.length>1?' · '+maps.length+' vues':''}</div></div><button id="mindMapLandscape" class="btn soft compact">↔ Paysage</button><span id="mindMapZoomLabel" class="badge">100%</span></div>${maps.length>1?`<div class="mindmap-pages">${maps.map((x,i)=>`<button class="btn ${i===0?'primary':'soft'} compact" data-mindmap-page="${i}">${i===0?'Vue globale':'Sous-carte '+i}</button>`).join('')}</div>`:''}<div class="mindmap-tools"><button id="mindMapMinus" class="btn">−</button><input id="mindMapZoom" type="range" min="25" max="240" value="100" step="10"><button id="mindMapPlus" class="btn">+</button><button id="mindMapFit" class="btn soft">Ajuster</button></div><div id="mindMapCanvas" class="mindmap-canvas"><div id="mindMapStatus" class="small mindmap-status">Chargement…</div><img id="mindMapImage" alt="Carte mentale ${esc(maps[0].title)}"></div>`;
  document.body.appendChild(overlay);
- const img=$('mindMapImage'),range=$('mindMapZoom'),lab=$('mindMapZoomLabel'),canvas=$('mindMapCanvas'),title=$('mindMapTitle');
- const setZoom=v=>{v=clamp(Number(v)||100,25,240);range.value=v;lab.textContent=v+'%';img.style.width=(19.2*v)+'px';};
- const showMap=i=>{active=clamp(Number(i)||0,0,maps.length-1);const x=maps[active];title.textContent=x.title;img.src='./'+x.path;img.alt='Carte mentale '+x.title;document.querySelectorAll('[data-mindmap-page]').forEach(b=>{const on=Number(b.dataset.mindmapPage)===active;b.className='btn '+(on?'primary':'soft')+' compact';b.setAttribute('aria-pressed',on?'true':'false')});setZoom(Number(range.value)||100);canvas.scrollTo({left:0,top:0})};
- $('mindMapClose').onclick=closeMindMap;const land=$('mindMapLandscape');if(land)land.onclick=mindMapLandscape;$('mindMapMinus').onclick=()=>setZoom(Number(range.value)-10);$('mindMapPlus').onclick=()=>setZoom(Number(range.value)+10);range.oninput=e=>setZoom(e.target.value);$('mindMapFit').onclick=()=>{const v=Math.max(25,Math.min(100,Math.floor((canvas.clientWidth/1920)*100)));setZoom(v);canvas.scrollTo({left:0,top:0})};document.querySelectorAll('[data-mindmap-page]').forEach(b=>b.onclick=()=>showMap(Number(b.dataset.mindmapPage)));
- setZoom(100);
+ const img=$('mindMapImage'),range=$('mindMapZoom'),lab=$('mindMapZoomLabel'),canvas=$('mindMapCanvas'),title=$('mindMapTitle'),status=$('mindMapStatus');
+ const baseWidth=()=>Math.min(Number(img.naturalWidth)||1920,1920);
+ const setZoom=v=>{v=clamp(Number(v)||100,25,240);range.value=v;lab.textContent=v+'%';img.style.width=(baseWidth()*v/100)+'px'};
+ const fit=()=>{const base=baseWidth(),w=Math.max(240,canvas.clientWidth-8),v=clamp(Math.floor((w/base)*100),25,100);setZoom(v);canvas.scrollTo({left:0,top:0})};
+ const loadActive=()=>{const x=maps[active];title.textContent=x.title;status.textContent='Chargement…';status.classList.remove('hidden');img.style.display='none';img.alt='Carte mentale '+x.title;img.onload=()=>{status.classList.add('hidden');img.style.display='block';setZoom(Number(range.value)||100)};img.onerror=()=>{status.textContent='Carte mentale indisponible dans ce build.';status.classList.remove('hidden');toast('Impossible de charger cette carte mentale.')};img.src='./'+x.path;document.querySelectorAll('[data-mindmap-page]').forEach(b=>{const on=Number(b.dataset.mindmapPage)===active;b.className='btn '+(on?'primary':'soft')+' compact';b.setAttribute('aria-pressed',on?'true':'false')});canvas.scrollTo({left:0,top:0})};
+ const showMap=i=>{active=clamp(Number(i)||0,0,maps.length-1);loadActive()};
+ $('mindMapClose').onclick=closeMindMap;const land=$('mindMapLandscape');if(land)land.onclick=mindMapLandscape;$('mindMapMinus').onclick=()=>setZoom(Number(range.value)-10);$('mindMapPlus').onclick=()=>setZoom(Number(range.value)+10);range.oninput=e=>setZoom(e.target.value);$('mindMapFit').onclick=fit;document.querySelectorAll('[data-mindmap-page]').forEach(b=>b.onclick=()=>showMap(Number(b.dataset.mindmapPage)));
+ loadActive();
 }
 function openCourseReader(chid,page){
  const pages=C.coursePages?.[chid]||[];
@@ -843,7 +870,7 @@ async function cacheCoursePages(chid,show=true){
      const path=queue.shift(),url=readerPageUrl(path);
      try{
        const cached=await caches.match(url);
-       if(!cached){const resp=await fetch(url,{cache:'reload'});if(!resp.ok)throw new Error('HTTP');const c=await caches.open('adaptive-pages-v3-25-2-content');await c.put(url,resp.clone())}
+       if(!cached){const resp=await fetch(url,{cache:'reload'});if(!resp.ok)throw new Error('HTTP');const c=await caches.open('adaptive-pages-v3-25-3-content');await c.put(url,resp.clone())}
      }catch(e){failed++}
      done++;if(btn&&show)btn.textContent=`${done}/${pages.length}`;
    }
@@ -856,7 +883,7 @@ async function cacheCoursePages(chid,show=true){
 async function warmAllCoursePages(){
  // Keep startup light; full offline copies remain an explicit action in the reader.
  const all=Object.values(C.coursePages||{}).flatMap(pages=>pages.slice(0,1));if(!all.length)return;
- let cursor=0;const workers=Array.from({length:6},async()=>{while(cursor<all.length){const path=all[cursor++],url=readerPageUrl(path);try{if(!(await caches.match(url))){const r=await fetch(url,{cache:'reload'});if(r.ok){const c=await caches.open('adaptive-pages-v3-25-2-content');await c.put(url,r.clone())}}}catch(_){} }});
+ let cursor=0;const workers=Array.from({length:6},async()=>{while(cursor<all.length){const path=all[cursor++],url=readerPageUrl(path);try{if(!(await caches.match(url))){const r=await fetch(url,{cache:'reload'});if(r.ok){const c=await caches.open('adaptive-pages-v3-25-3-content');await c.put(url,r.clone())}}}catch(_){} }});
  await Promise.all(workers);
  try{localStorage.setItem('adaptive-study-course-cache-3243-content','ready')}catch(_){}
 }
@@ -921,19 +948,23 @@ function guideSection(chid,section,mode){
  else body=`<div class="guide-card-grid">${entries.map(cell).join('')}</div>`;
  return `<section class="guide-section guide-${esc(section.type||'list')}"><div class="guide-section-heading"><h3>${esc(section.title)}</h3><span class="badge">${entries.length}</span></div>${body}</section>`;
 }
+function methodologyReminderHtml(chid){
+ const raw=C.methodologyReminders?.[chid];const items=Array.isArray(raw)?raw:(raw?[raw]:[]);if(!items.length)return'';
+ return `<section class="methodology-reminder"><div class="methodology-reminder-title">Méthode à garder en tête</div>${items.map(x=>typeof x==='string'?`<div class="methodology-reminder-line">${esc(x)}</div>`:`<div class="methodology-reminder-line"><b>${esc(x.title||'Rappel')}</b>${x.body?`<span>${esc(x.body)}</span>`:''}</div>`).join('')}</section>`;
+}
 function chapterSummary(chid,mode='high'){
  const c=chs[chid],subject=subs[c.subjectId],pages=C.coursePages?.[chid]||[],guide=C.courseGuides?.[chid];
  const version=C.courseMeta?.[chid]?.sourceVersion==='ANTICIPEE_AUTORISEE'?' · FC anticipée autorisée':'';
  if(mode==='high'&&guide){
    const dense=essentialGuideSections(guide),count=dense.reduce((n,x)=>n+x.items.length,0);
    const head=`<div class="essential-head"><div class="essential-head-main"><div class="row"><span class="badge accent">${esc(subject.name)}</span><span class="badge">${count} repères</span></div><h2>${esc(c.title)}</h2><div class="small">Synthèse essentielle haute densité · détails, preuves et sources complètes dans « Complet ».</div></div><div class="essential-actions"><button class="btn primary compact" data-course-quiz="${esc(chid)}">Quiz</button><button class="btn soft compact" data-course-cards="${esc(chid)}">Cartes</button>${pages.length?`<button class="btn compact" data-open-course="${esc(chid)}">FC</button>`:''}${C.mindMaps?.[chid]?`<button class="btn compact" data-mindmap="${esc(chid)}">Carte</button>`:''}</div></div>`;
-   return `<div class="study-sheet course-essential">${head}<div class="essential-columns">${dense.map(x=>essentialSection(chid,x.section,x.items)).join('')}</div></div>`;
+   return `<div class="study-sheet course-essential">${head}${methodologyReminderHtml(chid)}<div class="essential-columns">${dense.map(x=>essentialSection(chid,x.section,x.items)).join('')}</div></div>`;
  }
  const heading=`<div class="course-visual-hero"><div class="row"><span class="badge accent">${esc(subject.name)}</span><span class="badge">${pages.length} pages${version}</span></div><h2>${esc(c.title)}</h2><p>${mode==='visual'?'Pages de la FC originale.':'Synthèse complète réorganisée à partir des pages du cours. Chaque élément renvoie à sa page originale.'}</p><div class="course-hero-actions"><button class="btn primary" data-course-quiz="${esc(chid)}">S’entraîner</button><button class="btn soft" data-course-cards="${esc(chid)}">Flashcards</button>${pages.length?`<button class="btn soft" data-open-course="${esc(chid)}">Lire la FC originale</button>`:''}${C.mindMaps?.[chid]?`<button class="btn" data-mindmap="${esc(chid)}">Carte mentale</button>`:''}</div></div>`;
- if(mode==='visual')return `<div class="study-sheet course-visual">${heading}${coursePageGallery(chid)}</div>`;
+ if(mode==='visual')return `<div class="study-sheet course-visual">${heading}${methodologyReminderHtml(chid)}${coursePageGallery(chid)}</div>`;
  if(!guide)return `<div class="study-sheet course-visual">${heading}<div class="callout warn"><b>Synthèse structurée en cours de vérification</b><div class="small">Les pages de la FC sont disponibles. Aucun tableau ou détail n’est affiché ici tant que sa transcription et sa source n’ont pas été contrôlées.</div></div>${coursePageGallery(chid)}</div>`;
  const count=(guide.sections||[]).flatMap(x=>x.items||[]).length;
- return `<div class="study-sheet course-visual">${heading}<div class="guide-intro"><b>Cours réorganisé · tous les détails vérifiés</b><span class="badge">${count} éléments</span><p>La FC originale reste accessible pour le texte et les figures dans leur mise en page.</p></div>${(guide.sections||[]).map(section=>guideSection(chid,section,'all')).join('')}</div>`;
+ return `<div class="study-sheet course-visual">${heading}${methodologyReminderHtml(chid)}<div class="guide-intro"><b>Cours réorganisé · tous les détails vérifiés</b><span class="badge">${count} éléments</span><p>La FC originale reste accessible pour le texte et les figures dans leur mise en page.</p></div>${(guide.sections||[]).map(section=>guideSection(chid,section,'all')).join('')}</div>`;
 }
 function renderCourse(){
  $('courseContent').innerHTML=`<div class="summary-toolbar"><div class="card flat"><div class="grid"><div class="c5"><label class="lbl">Matière</label><select id="sumSub" class="field">${subOpts()}</select></div><div class="c7"><label class="lbl">Cours</label><select id="sumCh" class="field"></select></div></div><div class="course-view-tabs" role="group" aria-label="Vue du cours"><button id="sumHigh" class="btn primary" aria-pressed="true">Essentiel</button><button id="sumFull" class="btn soft" aria-pressed="false">Complet</button><button id="sumVisual" class="btn soft" aria-pressed="false">PDF original</button></div></div></div><div id="summaryOut"></div>`;
