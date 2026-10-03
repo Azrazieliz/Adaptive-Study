@@ -24,6 +24,10 @@ public class MainActivity extends Activity {
     private static AssetServer sharedServer;
     private WebView webView;
     private AssetServer server;
+    private int nativeTopInsetPx = 0;
+    private int nativeBottomInsetPx = 0;
+    private int nativeLeftInsetPx = 0;
+    private int nativeRightInsetPx = 0;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -36,14 +40,17 @@ public class MainActivity extends Activity {
             webView.setOnApplyWindowInsetsListener((v, insets) -> {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                     Insets bars = insets.getInsets(WindowInsets.Type.systemBars());
-                    v.setPadding(bars.left, bars.top, bars.right, bars.bottom);
+                    nativeLeftInsetPx = bars.left;
+                    nativeTopInsetPx = bars.top;
+                    nativeRightInsetPx = bars.right;
+                    nativeBottomInsetPx = bars.bottom;
                 } else {
-                    v.setPadding(
-                            insets.getSystemWindowInsetLeft(),
-                            insets.getSystemWindowInsetTop(),
-                            insets.getSystemWindowInsetRight(),
-                            insets.getSystemWindowInsetBottom());
+                    nativeLeftInsetPx = insets.getSystemWindowInsetLeft();
+                    nativeTopInsetPx = insets.getSystemWindowInsetTop();
+                    nativeRightInsetPx = insets.getSystemWindowInsetRight();
+                    nativeBottomInsetPx = insets.getSystemWindowInsetBottom();
                 }
+                applyInsetsToPage();
                 return insets;
             });
 
@@ -62,6 +69,12 @@ public class MainActivity extends Activity {
                     if (u == null) return false;
                     String h = u.getHost();
                     return "127.0.0.1".equals(h) || "localhost".equalsIgnoreCase(h);
+                }
+
+                @Override
+                public void onPageFinished(WebView view, String url) {
+                    super.onPageFinished(view, url);
+                    applyInsetsToPage();
                 }
 
                 @Override
@@ -86,10 +99,27 @@ public class MainActivity extends Activity {
             });
 
             server = obtainServer(getAssets());
-            webView.loadUrl("http://127.0.0.1:" + server.getPort() + "/index.html?build=3252&native=1");
+            webView.loadUrl("http://127.0.0.1:" + server.getPort() + "/index.html?build=3253&native=1");
         } catch (Throwable e) {
             showStartupError(e);
         }
+    }
+
+    private void applyInsetsToPage() {
+        if (webView == null) return;
+        final float density = getResources().getDisplayMetrics().density;
+        final int top = Math.round(nativeTopInsetPx / density);
+        final int bottom = Math.round(nativeBottomInsetPx / density);
+        final int left = Math.round(nativeLeftInsetPx / density);
+        final int right = Math.round(nativeRightInsetPx / density);
+        final String js = "(function(){var r=document.documentElement.style;" +
+                "r.setProperty('--native-top-inset','" + top + "px');" +
+                "r.setProperty('--native-bottom-inset','" + bottom + "px');" +
+                "r.setProperty('--native-left-inset','" + left + "px');" +
+                "r.setProperty('--native-right-inset','" + right + "px');})();";
+        webView.post(() -> {
+            try { webView.evaluateJavascript(js, null); } catch (Throwable ignored) {}
+        });
     }
 
     private static AssetServer obtainServer(AssetManager assets) throws IOException {
