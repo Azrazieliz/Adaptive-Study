@@ -1,4 +1,4 @@
-window.__ADAPTIVE_BUILD='3.25.0-standalone-clean';
+window.__ADAPTIVE_BUILD='3.25.1-standalone-autonomous';
 
 (()=>{
 const C=window.APP_CONTENT||window.STUDY_CONTENT,KEY='adaptive-study-v22-state',DAY=86400000;
@@ -508,7 +508,7 @@ function renderQuestion(){
    ?`<div class="exercise-context"><div class="row"><span class="badge accent">Module exercice</span><span class="badge warn">${esc(ex.level||'avancé')}</span><b>${esc(ex.title)}</b></div><div class="exercise-stem">${esc(ex.context)}</div>${exMedia}</div>`
    :`<details class="exercise-context reminder"><summary>Voir le document et les données de l’exercice</summary><div class="exercise-stem">${esc(ex.context)}</div>${exMedia}</details>`):'';
  const qMedia=mediaHtml(q);
- $('quizContent').innerHTML=`<div class="card">${sharedMedia}<div class="quiz-session-top"><button id="leaveSession" class="btn soft compact">← Choix du quiz</button><div id="questionClock" class="question-clock"></div></div><div class="row"><div class="question-meta grow"><span class="badge accent">${session.i+1}/${session.list.length}</span><span class="badge">${esc(subs[q.subjectId]?.name||'')}</span><span class="badge ${['ORIGINAL_ANNAL','ORIGINAL_QE'].includes(q.provenance)?'ok':''}">${esc(provenanceLabel(q))}</span>${q.format==='QCM'?'<span class="badge warn">1 à 5 réponses exactes</span>':''}</div><span class="small">${Math.round(100*session.score/Math.max(1,session.max))}%</span></div><div class="progress" style="margin-top:9px"><div style="width:${100*session.i/session.list.length}%"></div></div><div class="qtext">${esc(q.stem).replace(/\n/g,'<br>')}</div>${qMedia}<div class="small">Confiance avant réponse</div><div class="conf"><button data-conf="1">Hasard</button><button data-conf="2" class="active">Moyenne</button><button data-conf="3">Sûr</button></div>${answer}<div id="feedback" class="feedback hidden"></div><div class="sticky-actions"><button id="leaveSessionBottom" class="btn ghost">← Choix du quiz</button><span class="grow"></span><button id="validate" class="btn primary">Valider</button><button id="nextQ" class="btn primary hidden">Suivante</button></div></div>`;
+ $('quizContent').innerHTML=`<div class="card">${sharedMedia}<div class="quiz-session-top"><button id="leaveSession" class="btn soft compact">← Choix du quiz</button><div id="questionClock" class="question-clock"></div></div><div class="row"><div class="question-meta grow"><span class="badge accent">${session.i+1}/${session.list.length}</span><span class="badge">${esc(subs[q.subjectId]?.name||'')}</span><span class="badge">${esc(chs[q.chapterId]?.title||'')}</span><span class="badge ${['ORIGINAL_ANNAL','ORIGINAL_QE'].includes(q.provenance)?'ok':''}">${esc(provenanceLabel(q))}</span>${q.format==='QCM'?'<span class="badge warn">1 à 5 réponses exactes</span>':''}</div><span class="small">${Math.round(100*session.score/Math.max(1,session.max))}%</span></div><div class="progress" style="margin-top:9px"><div style="width:${100*session.i/session.list.length}%"></div></div><div class="qtext">${esc(q.stem).replace(/\n/g,'<br>')}</div>${qMedia}<div class="small">Confiance avant réponse</div><div class="conf"><button data-conf="1">Hasard</button><button data-conf="2" class="active">Moyenne</button><button data-conf="3">Sûr</button></div>${answer}<div id="feedback" class="feedback hidden"></div><div class="sticky-actions"><button id="leaveSessionBottom" class="btn ghost">← Choix du quiz</button><span class="grow"></span><button id="validate" class="btn primary">Valider</button><button id="nextQ" class="btn primary hidden">Suivante</button></div></div>`;
  document.querySelectorAll('.choice input').forEach(inp=>inp.onchange=()=>{if(q.format==='QCU')document.querySelectorAll('.choice').forEach(l=>l.classList.remove('selected'));inp.closest('.choice').classList.toggle('selected',inp.checked)});
  document.querySelectorAll('[data-conf]').forEach(b=>b.onclick=()=>{if(session.answered)return;session.conf=Number(b.dataset.conf);document.querySelectorAll('[data-conf]').forEach(x=>x.classList.toggle('active',x===b))});
  if(q.format==='QROC')$('qrocAns').oninput=e=>{const n=e.target.value.trim()?e.target.value.trim().split(/\n+/).length:0;$('lineCount').textContent=`${n} ligne(s)${q.maxLines?' / '+q.maxLines+' max':''}`};
@@ -759,7 +759,7 @@ async function ensureReaderPage(path){
  try{
    const resp=await fetch(url,{cache:'reload'});
    if(resp&&resp.ok){
-     try{const c=await caches.open('adaptive-pages-v3-25-0-content');await c.put(url,resp.clone())}catch(_){}
+     try{const c=await caches.open('adaptive-pages-v3-25-1-content');await c.put(url,resp.clone())}catch(_){}
      return url;
    }
  }catch(_){}
@@ -836,7 +836,7 @@ async function cacheCoursePages(chid,show=true){
      const path=queue.shift(),url=readerPageUrl(path);
      try{
        const cached=await caches.match(url);
-       if(!cached){const resp=await fetch(url,{cache:'reload'});if(!resp.ok)throw new Error('HTTP');const c=await caches.open('adaptive-pages-v3-25-0-content');await c.put(url,resp.clone())}
+       if(!cached){const resp=await fetch(url,{cache:'reload'});if(!resp.ok)throw new Error('HTTP');const c=await caches.open('adaptive-pages-v3-25-1-content');await c.put(url,resp.clone())}
      }catch(e){failed++}
      done++;if(btn&&show)btn.textContent=`${done}/${pages.length}`;
    }
@@ -849,7 +849,7 @@ async function cacheCoursePages(chid,show=true){
 async function warmAllCoursePages(){
  // Keep startup light; full offline copies remain an explicit action in the reader.
  const all=Object.values(C.coursePages||{}).flatMap(pages=>pages.slice(0,1));if(!all.length)return;
- let cursor=0;const workers=Array.from({length:6},async()=>{while(cursor<all.length){const path=all[cursor++],url=readerPageUrl(path);try{if(!(await caches.match(url))){const r=await fetch(url,{cache:'reload'});if(r.ok){const c=await caches.open('adaptive-pages-v3-25-0-content');await c.put(url,r.clone())}}}catch(_){} }});
+ let cursor=0;const workers=Array.from({length:6},async()=>{while(cursor<all.length){const path=all[cursor++],url=readerPageUrl(path);try{if(!(await caches.match(url))){const r=await fetch(url,{cache:'reload'});if(r.ok){const c=await caches.open('adaptive-pages-v3-25-1-content');await c.put(url,r.clone())}}}catch(_){} }});
  await Promise.all(workers);
  try{localStorage.setItem('adaptive-study-course-cache-3243-content','ready')}catch(_){}
 }
@@ -958,7 +958,7 @@ function renderSubjects(){const cards=C.subjects.map(s=>`<div class="card c6"><d
 function renderData(){
  const arc=C.documentArchive,a=C.auditPolicy||{};
  $('moreBody').innerHTML=`<div class="grid"><div class="card c6"><h2>Sauvegarde</h2><div class="small">La progression est locale à cet appareil.</div><div class="row" style="margin-top:9px"><button id="export" class="btn primary">Exporter</button><label class="btn">Importer<input id="import" type="file" class="hidden" accept=".json"></label><button id="reset" class="btn bad">Réinitialiser</button></div></div><div class="card c6"><h2>État du corpus</h2><div class="callout"><b>${(window.ORIGINAL_CORPUS||[]).length} questions et QROC originales consultables</b><div class="small">Sujets et corrigés reproduits en images depuis les PDF fournis. Aucun ancien QCM ou flashcard généré n’est actif. Notation automatique suspendue.</div></div></div>${arc?`<div class="card c12"><div class="row"><div class="grow"><h2>Archive documentaire</h2><div class="small">${arc.pdfCount} PDF regroupés dans un ZIP (${Math.round((arc.sizeBytes||0)/1024/1024)} Mo).</div></div><a class="btn soft" href="./${arc.path}" download>Archive PDF</a></div></div>`:''}</div>`;
- $('export').onclick=()=>{const blob=new Blob([JSON.stringify(S,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='adaptive_study_v3_25_progression.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500)};
+ $('export').onclick=()=>{const blob=new Blob([JSON.stringify(S,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='adaptive_study_v3_25_1_progression.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500)};
  $('import').onchange=async e=>{try{S=Object.assign(base(),JSON.parse(await e.target.files[0].text()));save();toast('Progression importée.')}catch(_){toast('Fichier invalide.')}};
  $('reset').onclick=()=>{if(confirm('Réinitialiser toute la progression ?')){S=base();save();toast('Progression réinitialisée.')}};
 }
