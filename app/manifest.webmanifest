@@ -1,9 +1,9 @@
 {
   "id": "./",
-  "name": "Concours — Adaptive Study v3.20.0",
+  "name": "Concours — Adaptive Study v3.25.0",
   "short_name": "Adaptive Study",
-  "description": "Révision adaptative du concours — 22 PDF recertifiés, synthèses détaillées, flashcards structurées et 4 400 questions reconstruites.",
-  "start_url": "./index.html?build=3180final",
+  "description": "Révision adaptative du concours — 31 cours, 5291 flashcards, 6742 QCM/QROC, synthèses structurées, erreurs et temps.",
+  "start_url": "./index.html?build=3250",
   "scope": "./",
   "display": "standalone",
   "display_override": [
