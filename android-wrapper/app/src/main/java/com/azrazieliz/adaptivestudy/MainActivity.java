@@ -2,6 +2,9 @@ package com.azrazieliz.adaptivestudy;
 
 import android.app.Activity;
 import android.os.Bundle;
+import android.os.Build;
+import android.view.WindowInsets;
+import android.graphics.Insets;
 import android.content.Intent;
 import android.net.Uri;
 import android.webkit.WebSettings;
@@ -29,6 +32,20 @@ public class MainActivity extends Activity {
         try {
             webView = new WebView(this);
             setContentView(webView);
+
+            webView.setOnApplyWindowInsetsListener((v, insets) -> {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    Insets bars = insets.getInsets(WindowInsets.Type.systemBars());
+                    v.setPadding(bars.left, bars.top, bars.right, bars.bottom);
+                } else {
+                    v.setPadding(
+                            insets.getSystemWindowInsetLeft(),
+                            insets.getSystemWindowInsetTop(),
+                            insets.getSystemWindowInsetRight(),
+                            insets.getSystemWindowInsetBottom());
+                }
+                return insets;
+            });
 
             WebSettings s = webView.getSettings();
             s.setJavaScriptEnabled(true);
@@ -69,7 +86,7 @@ public class MainActivity extends Activity {
             });
 
             server = obtainServer(getAssets());
-            webView.loadUrl("http://127.0.0.1:" + server.getPort() + "/index.html?build=3251");
+            webView.loadUrl("http://127.0.0.1:" + server.getPort() + "/index.html?build=3252&native=1");
         } catch (Throwable e) {
             showStartupError(e);
         }
