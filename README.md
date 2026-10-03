@@ -1,12 +1,12 @@
 # Concours — Adaptive Study
 
-Public source for the **Adaptive Study v3.25.0** mobile/PWA engine.
+Public source for the **Adaptive Study v3.25.1** mobile/PWA engine.
 
 The public repository contains the application engine, mobile interface, offline/runtime logic and Android wrapper. The user-owned medical course PDFs, page images, compiled flashcards, QCM/QROC banks and documentary originals are intentionally **not published**.
 
-The validated private v3.25.0 package currently contains **31 active courses, 5,291 flashcards, 6,322 QCM + 420 QROC (6,742 active questions), 623 documentary original units and four Santé publique mind maps**. Those counts describe the private release, not a fresh public clone.
+The validated private v3.25.1 package currently contains **31 active courses, 5,291 flashcards, 6,322 QCM + 420 QROC (6,742 active questions), 623 documentary original units and four Santé publique mind maps**. Those counts describe the private release, not a fresh public clone.
 
-## v3.25.0 changes
+## v3.25.1 changes
 
 - compact mobile dashboard with subject mastery and immediate adaptive priority;
 - adaptive priority driven by score, repeated errors, active response time and recency/unseen status;
@@ -23,7 +23,7 @@ The validated private v3.25.0 package currently contains **31 active courses, 5,
 The repository stays usable without private data: it starts with the seven subjects and no active private bank. To restore a matching private package locally:
 
 ```bash
-python3 tools/restore_private_bundle.py /path/to/AdaptiveStudy_v3.25.0_STANDALONE_CLEAN_SOURCE.zip
+python3 tools/restore_private_bundle.py /path/to/AdaptiveStudy_v3.25.1_STANDALONE_CLEAN_SOURCE.zip
 python3 -m http.server 8765 --directory local_instance/app
 ```
 
@@ -41,3 +41,7 @@ Then open `http://127.0.0.1:8765/`.
 - Missing source material stays unavailable instead of being invented.
 
 See [`ADAPTIVE_STUDY_REQUIREMENTS.md`](ADAPTIVE_STUDY_REQUIREMENTS.md) for the frozen functional requirements.
+
+## Autonomous study items
+
+Flashcards and questions must be understandable from the item itself. Source files and page numbers exist only for traceability and correction. A flashcard must name its chapter/topic explicitly; a question may rely on an attached figure/table only when that media is bundled with the same item. Phrases such as “according to the document/course/FC”, unresolved “this example/experiment/case”, and cross-question dependencies are rejected by release validation.
