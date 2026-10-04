@@ -99,7 +99,7 @@ public class MainActivity extends Activity {
             });
 
             server = obtainServer(getAssets());
-            webView.loadUrl("http://127.0.0.1:" + server.getPort() + "/index.html?build=3260&native=1");
+            webView.loadUrl("http://127.0.0.1:" + server.getPort() + "/index.html?build=3261&native=1");
         } catch (Throwable e) {
             showStartupError(e);
         }
