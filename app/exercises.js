@@ -1,2 +1,2 @@
-window.__EXERCISES_BUILD='3.25.5-mindmaps10';
-window.AdaptiveExercises={auditStatus:'PRIVATE_CORPUS_REQUIRED',version:'3.25.5-mindmaps10',documentQuestionsDisabled:true,counts:{phys:0,bio:0,biocell:0},generate(){return null}};
+window.__EXERCISES_BUILD='3.26.0';
+window.AdaptiveExercises={auditStatus:'PRIVATE_CORPUS_REQUIRED',version:'3.26.0',documentQuestionsDisabled:true,counts:{phys:0,bio:0,biocell:0},generate(){return null}};
