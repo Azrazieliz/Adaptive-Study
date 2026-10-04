@@ -1,12 +1,12 @@
 # Concours — Adaptive Study
 
-Public source for the **Adaptive Study v3.26.0** mobile/PWA engine.
+Public source for the **Adaptive Study v3.26.1** mobile/PWA engine.
 
 The public repository contains the application engine, mobile interface, offline/runtime logic and Android wrapper. The user-owned medical course PDFs, page images, compiled flashcards, QCM/QROC banks and documentary originals are intentionally **not published**.
 
-The validated private v3.26.0 package currently contains **37 active courses, 5,635 flashcards, 7,822 QCM + 420 QROC (8,242 active questions), 969 documentary original units and the existing 7-course / 19-image mind-map pack**. Those counts describe the private release, not a fresh public clone.
+The validated private v3.26.1 package currently contains **37 active courses, 5,635 flashcards, 7,822 QCM + 420 QROC (8,242 active questions), 969 documentary original units and the existing 7-course / 19-image mind-map pack**. Those counts describe the private release, not a fresh public clone.
 
-## v3.26.0 changes
+## v3.26.1 changes
 
 - compact mobile dashboard with subject mastery and immediate adaptive priority;
 - adaptive priority driven by score, repeated errors, active response time and recency/unseen status;
@@ -30,7 +30,7 @@ The validated private v3.26.0 package currently contains **37 active courses, 5,
 - mind-map renderer verified and corrected for actual image widths, with load/error handling;
 - empty per-course methodology reminder slot ready for user-provided methods.
 
-## v3.26.0 corpus addition
+## v3.26.1 corpus addition
 
 Six new source-backed courses were added from user PDFs with course pages, dense guides, autonomous flashcards, 250 source-backed QCM per course, and the supplied QE/ACC/training question-and-correction pages preserved as documentary originals:
 
@@ -43,7 +43,7 @@ Six new source-backed courses were added from user PDFs with course pages, dense
 
 The public repository contains only the engine and course skeletons, not those private PDFs or compiled banks.
 
-## v3.26.0 mind-map integration
+## v3.26.1 mind-map integration
 
 The private build adds 10 additional course mind maps (6 SHS + 4 Histologie), bringing the registered private mind-map coverage to 17 courses. These course-derived images stay out of the public repository.
 
@@ -52,7 +52,7 @@ The private build adds 10 additional course mind maps (6 SHS + 4 Histologie), br
 The repository stays usable without private data: it starts with the seven subjects and no active private bank. To restore a matching private package locally:
 
 ```bash
-python3 tools/restore_private_bundle.py /path/to/AdaptiveStudy_v3.26.0_NEW_COURSES_SOURCE.zip
+python3 tools/restore_private_bundle.py /path/to/AdaptiveStudy_v3.26.1_NEW_COURSES_SOURCE.zip
 python3 -m http.server 8765 --directory local_instance/app
 ```
 
@@ -74,3 +74,10 @@ See [`ADAPTIVE_STUDY_REQUIREMENTS.md`](ADAPTIVE_STUDY_REQUIREMENTS.md) for the f
 ## Autonomous study items
 
 Flashcards and questions must be understandable from the item itself. Source files and page numbers exist only for traceability and correction. A flashcard must contain enough natural subject context to be understandable on its own without mechanically prefixing the chapter name; a question may rely on an attached figure/table only when that media is bundled with the same item. Phrases such as “according to the document/course/FC”, unresolved “this example/experiment/case”, and cross-question dependencies are rejected by release validation.
+
+
+### v3.26.1 correction
+- Restores the full “Concours — Adaptive Study” branding.
+- Removes remaining “theme” boilerplate and subject-prefix wording from derived QCMs.
+- Converts label/value distractors to direct declarative propositions.
+- Stops whole-QCM error cards from entering the flashcard scheduler and removes legacy copies on migration.
