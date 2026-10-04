@@ -563,8 +563,7 @@ function updateLearning(q,res,sec,answer){
  const key=q.subjectId+':'+q.conceptId;
  if(res.score<1){const old=S.errors[key];const supp=courseSupportFor(q,answer).map(f=>({term:f.term,answer:f.answer,source:f.source}));
  S.errors[key]={id:key,subjectId:q.subjectId,chapterId:q.chapterId,conceptId:q.conceptId,question:q.stem,correction:q.explanation,courseSupport:supp,optionRationales:q.optionRationales||[],source:q.source,count:(old?.count||0)+1,open:true,last:new Date().toISOString(),confidence:session.conf,time:sec,targetSec:questionTargetSec(q),score:res.score};
- const supportBack=[q.explanation,...supp.map(x=>x.term+' — '+x.answer)].filter(Boolean).join('\n\n');
- S.cards['err:'+key]=Object.assign(S.cards['err:'+key]||{interval:0,ease:2,reps:0},{due:now(),custom:true,front:q.stem,back:supportBack,subjectId:q.subjectId,chapterId:q.chapterId,source:{kind:'Erreur personnelle'}})}
+ }
  save()
 }
 function submit(q){
