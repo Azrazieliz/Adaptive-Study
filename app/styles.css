@@ -493,3 +493,11 @@ details.sheet-section[open]>summary:after{transform:rotate(0)}
 @media(max-width:600px){.course-multi-panel{position:fixed;left:9px;right:9px;top:auto;bottom:calc(72px + var(--native-bottom-inset));max-height:58vh}.course-multi-list{max-height:48vh}.quiz-setup-grid label:nth-child(2){z-index:4}.flash-setup-grid{grid-template-columns:1fr 1fr}.flash-setup-grid .course-multi-label{grid-column:1/-1;grid-row:2}.flash-setup-grid .lbl:last-child{grid-column:2;grid-row:1}.card-mode-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .methodology-reminder{margin:7px 0 9px;padding:8px 10px;border:1px solid #486590;border-left:4px solid var(--accent);border-radius:10px;background:#132037}.methodology-reminder-title{font-weight:850;font-size:12px;color:#d9e4ff;margin-bottom:4px}.methodology-reminder-line{font-size:11px;line-height:1.35;color:#d9e0eb;padding:3px 0}.methodology-reminder-line b,.methodology-reminder-line span{display:block}.methodology-reminder-line span{color:var(--muted);margin-top:1px}
 .mindmap-status{padding:10px}.mindmap-canvas img{max-width:none;height:auto}
+
+
+/* v3.26.0 — native header safe area / branding */
+.native-app{padding-top:0!important}
+.native-app .app-header{position:sticky!important;top:0!important;padding-top:var(--native-top-inset)!important;z-index:60}
+.native-app .header-inner{min-height:54px}
+.native-app .brand-title{display:block!important;visibility:visible!important;font-size:18px;font-weight:900}
+@media(max-width:650px){.native-app .brand-sub{display:block;font-size:10px;line-height:1.2;margin-top:2px}}
