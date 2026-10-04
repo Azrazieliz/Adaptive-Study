@@ -1,9 +1,9 @@
 {
   "id": "./",
-  "name": "Concours — Adaptive Study v3.26.0",
+  "name": "Concours — Adaptive Study v3.26.1",
   "short_name": "Adaptive Study",
   "description": "Révision adaptative du concours — 37 cours privés, 5635 flashcards, 8242 QCM/QROC, synthèses structurées, erreurs et temps.",
-  "start_url": "./index.html?build=3260",
+  "start_url": "./index.html?build=3261",
   "scope": "./",
   "display": "standalone",
   "display_override": [
