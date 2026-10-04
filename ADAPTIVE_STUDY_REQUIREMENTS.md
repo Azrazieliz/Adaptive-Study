@@ -72,12 +72,24 @@
 - Reminders appear compactly in course views and must never be invented from external knowledge.
 - Methodology reminders are separate from authoritative course facts.
 
+## Flashcard quality
+
+- Quiz errors must not automatically become flashcards containing the whole QCM stem.
+- Error remediation cards may only be created from an explicit, independently understandable course fact.
+- Legacy custom cards copied verbatim from quiz stems must be purged during state migration.
+- Explicit flashcards must remain direct recall prompts, not generic QCM stems such as “À propos du thème … quelles propositions… ?”.
+
 ## Flashcards, syntheses, errors
 
 - Flashcards must be autonomous, natural and reversible for rereading the question after revealing the answer.
 - Avoid synonymous duplicate cards and support-dependent wording (“on this page”, “in the figure”, etc.).
 - “Essential” is a dense pre-exam reread: compact enough to finish quickly, limited to the highest-yield repères, with no per-item source block or decorative padding that forces excessive scrolling. “Complete” is exhaustive within the supplied corpus.
 - Error notebook must be filterable and show correction, source, repetition count, timing and remediation actions.
+
+## Branding
+
+- The native header branding is `Concours — Adaptive Study`, with the version in a separate compact chip.
+- Do not silently shorten the product name to only `Adaptive Study`.
 
 ## Native APK behavior
 
