@@ -42,6 +42,14 @@
 - Physics: linked large exercises; calculator allowed.
 - SHS: QROC and text commentary only when a usable sourced task/correction exists; never fabricate unsupported commentary material.
 
+## Mind maps
+
+- Mind maps must use course PDFs as the factual authority.
+- QE/annales may guide emphasis but must not contribute facts absent from the course.
+- One landscape 16:9 map per course unless a validated course already uses sub-maps.
+- Dense but readable: short fragments, strong hierarchy, no tiny prose blocks, no decorative clutter.
+- A course exposes the map action only when the corresponding image asset is present in the private build.
+
 ## Course methodology reminders
 
 - User-provided course methodologies can be stored as per-course reminders.
