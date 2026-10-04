@@ -4,7 +4,7 @@ Public source for the **Adaptive Study v3.26.1** mobile/PWA engine.
 
 The public repository contains the application engine, mobile interface, offline/runtime logic and Android wrapper. The user-owned medical course PDFs, page images, compiled flashcards, QCM/QROC banks and documentary originals are intentionally **not published**.
 
-The validated private v3.26.1 package currently contains **37 active courses, 5,635 flashcards, 7,822 QCM + 420 QROC (8,242 active questions), 969 documentary original units and the existing 7-course / 19-image mind-map pack**. Those counts describe the private release, not a fresh public clone.
+The validated private v3.26.1 package currently contains **37 active courses, 5,635 flashcards, 7,822 QCM + 420 QROC (8,242 active questions), 969 documentary original units and complete mind-map coverage for 37 active courses / 49 images including validated sub-maps**. Those counts describe the private release, not a fresh public clone.
 
 ## v3.26.1 changes
 
@@ -81,3 +81,10 @@ Flashcards and questions must be understandable from the item itself. Source fil
 - Removes remaining “theme” boilerplate and subject-prefix wording from derived QCMs.
 - Converts label/value distractors to direct declarative propositions.
 - Stops whole-QCM error cards from entering the flashcard scheduler and removes legacy copies on migration.
+
+
+### v3.26.1 final mind-map completion
+- All 37 active private courses now have a registered landscape mind map.
+- The private release contains 49 mind-map images in total, including retained validated sub-maps.
+- The 20 previously missing course mind maps are complete in the private package.
+- These user-course-derived images remain excluded from the public repository.
