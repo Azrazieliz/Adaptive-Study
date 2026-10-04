@@ -30,6 +30,15 @@
 - Adaptive priority and session statistics must respect the exact selected course set.
 - Original-PDF browsing may require a single course because source pages are course-scoped.
 
+## Natural QCM wording
+
+- Do not repeat the already-selected subject in a question stem (for example, no “En histologie, concernant…” boilerplate).
+- Derived QCM stems must read as normal French questions and include the article/preposition required by the topic.
+- Every option must be a direct, independently readable declarative proposition.
+- Meta-distractors such as “La notion « X » correspond à l’énoncé suivant : …” are prohibited.
+- False options must be plausible statements about the tested concept and must be contradicted by positive course evidence; they must not be made false merely by attaching an unrelated label to a true sentence.
+- Release validation must reject these prohibited patterns.
+
 ## Questions and exercises
 
 - Match the observed exam style per subject/course; avoid generic placeholder wording.
@@ -49,6 +58,13 @@
 - One landscape 16:9 map per course unless a validated course already uses sub-maps.
 - Dense but readable: short fragments, strong hierarchy, no tiny prose blocks, no decorative clutter.
 - A course exposes the map action only when the corresponding image asset is present in the private build.
+
+## Mindmaps
+
+- All active courses must have a registered 16:9 mindmap.
+- Mindmaps must use only the supplied course corpus.
+- Existing detailed sub-maps are retained when present.
+- A release must fail validation if an active course has no registered mindmap or if a registered asset is missing.
 
 ## Course methodology reminders
 
