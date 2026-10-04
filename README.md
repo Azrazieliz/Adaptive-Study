@@ -1,12 +1,12 @@
 # Concours — Adaptive Study
 
-Public source for the **Adaptive Study v3.25.4** mobile/PWA engine.
+Public source for the **Adaptive Study v3.25.5** mobile/PWA engine.
 
 The public repository contains the application engine, mobile interface, offline/runtime logic and Android wrapper. The user-owned medical course PDFs, page images, compiled flashcards, QCM/QROC banks and documentary originals are intentionally **not published**.
 
-The validated private v3.25.4 package currently contains **37 active courses, 5,635 flashcards, 7,822 QCM + 420 QROC (8,242 active questions), 969 documentary original units and the existing 7-course / 19-image mind-map pack**. Those counts describe the private release, not a fresh public clone.
+The validated private v3.25.5 package currently contains **37 active courses, 5,635 flashcards, 7,822 QCM + 420 QROC (8,242 active questions), 969 documentary original units and the existing 7-course / 19-image mind-map pack**. Those counts describe the private release, not a fresh public clone.
 
-## v3.25.4 changes
+## v3.25.5 changes
 
 - compact mobile dashboard with subject mastery and immediate adaptive priority;
 - adaptive priority driven by score, repeated errors, active response time and recency/unseen status;
@@ -30,7 +30,7 @@ The validated private v3.25.4 package currently contains **37 active courses, 5,
 - mind-map renderer verified and corrected for actual image widths, with load/error handling;
 - empty per-course methodology reminder slot ready for user-provided methods.
 
-## v3.25.4 corpus addition
+## v3.25.5 corpus addition
 
 Six new source-backed courses were added from user PDFs with course pages, dense guides, autonomous flashcards, 250 source-backed QCM per course, and the supplied QE/ACC/training question-and-correction pages preserved as documentary originals:
 
@@ -43,12 +43,16 @@ Six new source-backed courses were added from user PDFs with course pages, dense
 
 The public repository contains only the engine and course skeletons, not those private PDFs or compiled banks.
 
+## v3.25.5 mind-map integration
+
+The private build adds 10 additional course mind maps (6 SHS + 4 Histologie), bringing the registered private mind-map coverage to 17 courses. These course-derived images stay out of the public repository.
+
 ## Private corpus restoration
 
 The repository stays usable without private data: it starts with the seven subjects and no active private bank. To restore a matching private package locally:
 
 ```bash
-python3 tools/restore_private_bundle.py /path/to/AdaptiveStudy_v3.25.4_NEW_COURSES_SOURCE.zip
+python3 tools/restore_private_bundle.py /path/to/AdaptiveStudy_v3.25.5_NEW_COURSES_SOURCE.zip
 python3 -m http.server 8765 --directory local_instance/app
 ```
 
