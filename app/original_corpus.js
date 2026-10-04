@@ -1,2 +1,2 @@
-window.__ORIGINAL_CORPUS_BUILD='3.25.5-mindmaps10';
+window.__ORIGINAL_CORPUS_BUILD='3.26.0';
 window.ORIGINAL_CORPUS = [];
