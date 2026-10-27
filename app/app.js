@@ -206,7 +206,7 @@ function preloadNextMedia(){
 }
 
 function visualPool(sid,chid){
- return C.questions.filter(q=>q.media&&q.subjectId===sid&&chapterMatches(q.chapterId,chid));
+ return C.questions.filter(q=>q.media&&q.subjectId===sid&&chapterMatches(q.chapterId,chid)&&availableQuestion(q));
 }
 function runtimeRecovery(err){
  console.error(err);
@@ -459,7 +459,26 @@ function questionPriority(q){
  const st=S.concepts[q.subjectId+':'+q.conceptId],m=mastery(st),wrong=clamp((st?.wrongStreak||0)/2,0,1),slow=clamp(((st?.timeRatioEMA||1)-1)/.55,0,1);
  return .5*(1-m)+.28*wrong+.18*slow+.04*Math.random();
 }
-function bankPool(sid,chid){return C.questions.filter(q=>q.subjectId===sid&&chapterMatches(q.chapterId,chid))}
+function questionStructuralIssue(q){
+ if(!q||!q.id||!chs[q.chapterId]||!String(q.stem||'').trim())return 'identity, course or stem absent';
+ if(q.format==='QCM'||q.format==='QCU'){
+  if(!Array.isArray(q.options)||q.options.length<3||q.options.length>5)return 'invalid options';
+  if(!Array.isArray(q.correct)||!q.correct.length||q.correct.some(i=>!Number.isInteger(i)||i<0||i>=q.options.length))return 'invalid answer key';
+  if(new Set(q.options.map(normTxt)).size!==q.options.length)return 'duplicated options';
+ }
+ return '';
+}
+function availableQuestion(q){return !questionStructuralIssue(q)&&!(S.flags||{})[q.id]?.excluded}
+function bankPool(sid,chid){return C.questions.filter(q=>q.subjectId===sid&&chapterMatches(q.chapterId,chid)&&availableQuestion(q))}
+function exportQualityReports(){
+ const flags=Object.entries(S.flags||{}).map(([id,f])=>({id,...f,question:(C.questions||[]).find(q=>q.id===id)||null}));
+ const structural=(C.questions||[]).filter(q=>questionStructuralIssue(q)).map(q=>({id:q.id,chapterId:q.chapterId,issue:questionStructuralIssue(q)}));
+ const data=JSON.stringify({format:'AdaptiveStudy-QA-v1',created:new Date().toISOString(),flags,structural},null,2);
+ const url=URL.createObjectURL(new Blob([data],{type:'application/json'})),a=document.createElement('a');
+ a.href=url;a.download='adaptive-study-question-reports.json';document.body.appendChild(a);a.click();a.remove();
+ setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+
 function derivedPool(sid,chid){return bankPool(sid,chid).filter(q=>{const p=String(q.provenance||'');return p.startsWith('DERIVED_PDF')||p.startsWith('PDF_DERIVED')||p==='DERIVED_ANNAL'})}
 function trainingPool(sid,chid){return derivedPool(sid,chid).filter(q=>/TRAINING/.test(String(q.provenance||''))||q.exerciseMode==='TRAINING_ISOLATED')}
 function linkedExamPool(sid,chid){return bankPool(sid,chid).filter(q=>q.exerciseMode==='EXAM_LINKED'&&q.exerciseGroupId)}
@@ -468,7 +487,7 @@ function annalPool(sid,chid){return bankPool(sid,chid).filter(q=>q.provenance===
 function originalPool(sid,chid){return bankPool(sid,chid)}
 function qrocPool(sid,chid){
  return C.questions
-  .filter(q=>q.format==='QROC'&&q.subjectId===sid&&chapterMatches(q.chapterId,chid))
+  .filter(q=>q.format==='QROC'&&q.subjectId===sid&&chapterMatches(q.chapterId,chid)&&availableQuestion(q))
   .sort((a,b)=>{
     const pa=a.trainingPriority==='prioritaire'?1:0,pb=b.trainingPriority==='prioritaire'?1:0;
     if(pa!==pb)return pb-pa;
@@ -527,10 +546,19 @@ function renderQuestion(){
  const exMedia=ex?.media?mediaHtml({media:ex.media}):'';
  const sharedMedia=ex?`<div class="exercise-context"><div class="row"><span class="badge accent">Contexte complet</span><span class="badge warn">${esc(ex.level||'avancé')}</span><b>${esc(ex.title)}</b></div><div class="exercise-stem">${esc(ex.context)}</div>${exMedia}</div>`:'';
  const qMedia=mediaHtml(q);
- $('quizContent').innerHTML=`<div class="card">${sharedMedia}<div class="quiz-session-top"><button id="leaveSession" class="btn soft compact">← Choix du quiz</button><div id="questionClock" class="question-clock"></div></div><div class="row"><div class="question-meta grow"><span class="badge accent">${session.i+1}/${session.list.length}</span><span class="badge">${esc(subs[q.subjectId]?.name||'')}</span><span class="badge">${esc(chs[q.chapterId]?.title||'')}</span><span class="badge ${['ORIGINAL_ANNAL','ORIGINAL_QE'].includes(q.provenance)?'ok':''}">${esc(provenanceLabel(q))}</span>${q.format==='QCM'?'<span class="badge warn">1 à 5 réponses exactes</span>':''}</div><span class="small">${Math.round(100*session.score/Math.max(1,session.max))}%</span></div><div class="progress" style="margin-top:9px"><div style="width:${100*session.i/session.list.length}%"></div></div><div class="qtext">${esc(q.stem).replace(/\n/g,'<br>')}</div>${qMedia}<div class="small">Confiance avant réponse</div><div class="conf"><button data-conf="1">Hasard</button><button data-conf="2" class="active">Moyenne</button><button data-conf="3">Sûr</button></div>${answer}<div id="feedback" class="feedback hidden"></div><div class="sticky-actions"><button id="leaveSessionBottom" class="btn ghost">← Choix du quiz</button><span class="grow"></span><button id="validate" class="btn primary">Valider</button><button id="nextQ" class="btn primary hidden">Suivante</button></div></div>`;
+ $('quizContent').innerHTML=`<div class="card">${sharedMedia}<div class="quiz-session-top"><button id="leaveSession" class="btn soft compact">← Choix du quiz</button><div id="questionClock" class="question-clock"></div><button id="flagQuestion" class="btn ghost compact" type="button">Signaler</button></div><div id="questionFlagBox" class="report-question hidden"><b>Écarter une question de mauvaise qualité</b><label class="lbl">Problème<select id="questionFlagReason" class="field"><option value="Énoncé ambigu">Énoncé ambigu</option><option value="Réponse fausse">Réponse fausse</option><option value="Source manquante">Source manquante</option><option value="Doublon ou mauvaise qualité">Doublon ou mauvaise qualité</option><option value="Image ou contexte manquant">Image ou contexte manquant</option></select></label><textarea id="questionFlagNote" class="field" placeholder="Précision facultative"></textarea><div class="row"><button type="button" id="questionFlagSave" class="btn bad">Écarter et signaler</button><button type="button" id="questionFlagCancel" class="btn soft">Annuler</button></div></div><div class="row"><div class="question-meta grow"><span class="badge accent">${session.i+1}/${session.list.length}</span><span class="badge">${esc(subs[q.subjectId]?.name||'')}</span><span class="badge">${esc(chs[q.chapterId]?.title||'')}</span><span class="badge ${['ORIGINAL_ANNAL','ORIGINAL_QE'].includes(q.provenance)?'ok':''}">${esc(provenanceLabel(q))}</span>${q.format==='QCM'?'<span class="badge warn">1 à 5 réponses exactes</span>':''}</div><span class="small">${Math.round(100*session.score/Math.max(1,session.max))}%</span></div><div class="progress" style="margin-top:9px"><div style="width:${100*session.i/session.list.length}%"></div></div><div class="qtext">${esc(q.stem).replace(/\n/g,'<br>')}</div>${qMedia}<div class="small">Confiance avant réponse</div><div class="conf"><button data-conf="1">Hasard</button><button data-conf="2" class="active">Moyenne</button><button data-conf="3">Sûr</button></div>${answer}<div id="feedback" class="feedback hidden"></div><div class="sticky-actions"><button id="leaveSessionBottom" class="btn ghost">← Choix du quiz</button><span class="grow"></span><button id="validate" class="btn primary">Valider</button><button id="nextQ" class="btn primary hidden">Suivante</button></div></div>`;
  document.querySelectorAll('.choice input').forEach(inp=>inp.onchange=()=>{if(q.format==='QCU')document.querySelectorAll('.choice').forEach(l=>l.classList.remove('selected'));inp.closest('.choice').classList.toggle('selected',inp.checked)});
  document.querySelectorAll('[data-conf]').forEach(b=>b.onclick=()=>{if(session.answered)return;session.conf=Number(b.dataset.conf);document.querySelectorAll('[data-conf]').forEach(x=>x.classList.toggle('active',x===b))});
  if(q.format==='QROC')$('qrocAns').oninput=e=>{const n=e.target.value.trim()?e.target.value.trim().split(/\n+/).length:0;$('lineCount').textContent=`${n} ligne(s)${q.maxLines?' / '+q.maxLines+' max':''}`};
+ $('flagQuestion').onclick=()=>$('questionFlagBox').classList.toggle('hidden');
+ $('questionFlagCancel').onclick=()=>$('questionFlagBox').classList.add('hidden');
+ $('questionFlagSave').onclick=()=>{
+  S.flags=S.flags||{};
+  S.flags[q.id]={reason:$('questionFlagReason').value,note:$('questionFlagNote').value.trim(),excluded:true,at:new Date().toISOString(),chapterId:q.chapterId};
+  save();toast('Question écartée des prochaines sessions.');
+  if(!session.answered){stopQuestionTimer();session.i++;session.answered=false;renderQuestion()}
+  else $('questionFlagBox').classList.add('hidden');
+ };
  $('validate').onclick=()=>submit(q);
  $('leaveSession').onclick=()=>leaveQuizSession(true);
  const leaveBottom=$('leaveSessionBottom');if(leaveBottom)leaveBottom.onclick=()=>leaveQuizSession(true);
@@ -1064,6 +1092,10 @@ function renderSubjects(){const cards=C.subjects.map(s=>`<div class="card c6"><d
 function renderData(){
  const arc=C.documentArchive,a=C.auditPolicy||{};
  $('moreBody').innerHTML=`<div class="grid"><div class="card c6"><h2>Sauvegarde</h2><div class="small">La progression est locale à cet appareil.</div><div class="row" style="margin-top:9px"><button id="export" class="btn primary">Exporter</button><label class="btn">Importer<input id="import" type="file" class="hidden" accept=".json"></label><button id="reset" class="btn bad">Réinitialiser</button></div></div><div class="card c6"><h2>État du corpus</h2><div class="callout"><b>${(window.ORIGINAL_CORPUS||[]).length} questions et QROC originales consultables</b><div class="small">Sujets et corrigés reproduits en images depuis les PDF fournis. Aucun ancien QCM ou flashcard généré n’est actif. Notation automatique suspendue.</div></div></div>${arc?`<div class="card c12"><div class="row"><div class="grow"><h2>Archive documentaire</h2><div class="small">${arc.pdfCount} PDF regroupés dans un ZIP (${Math.round((arc.sizeBytes||0)/1024/1024)} Mo).</div></div><a class="btn soft" href="./${arc.path}" download>Archive PDF</a></div></div>`:''}</div>`;
+ const qa=document.createElement('div');qa.className='card c12';
+ qa.innerHTML='<h2>Contrôle qualité des questions</h2><p class="small">'+Object.keys(S.flags||{}).length+' questions signalées · '+(C.questions||[]).filter(questionStructuralIssue).length+' entrées structurellement invalides.</p><button id="downloadQA" class="btn soft">Exporter les signalements JSON</button>';
+ $('moreBody').querySelector('.grid').appendChild(qa);
+ $('downloadQA').onclick=exportQualityReports;
  $('export').onclick=()=>{const blob=new Blob([JSON.stringify(S,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='adaptive_study_v3_25_2_progression.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500)};
  $('import').onchange=async e=>{try{S=Object.assign(base(),JSON.parse(await e.target.files[0].text()));save();toast('Progression importée.')}catch(_){toast('Fichier invalide.')}};
  $('reset').onclick=()=>{if(confirm('Réinitialiser toute la progression ?')){S=base();save();toast('Progression réinitialisée.')}};
