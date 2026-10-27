@@ -5,7 +5,7 @@ ROOT=pathlib.Path(__file__).resolve().parents[1]
 LOCAL_APP=ROOT/'local_instance'/'app'
 PREFIX='AdaptiveStudyInstall/app/'
 PRIVATE_FILES={'content.js','original_corpus.js','exercises.js'}
-EXPECTED=_content_version((ROOT/'app'/'content.js').read_bytes()) # use the actual bundled engine contract
+EXPECTED=json.loads((ROOT/'app'/'content.js').read_text(encoding='utf-8').split('=',1)[1].strip().rstrip(';'))['pack']['version']
 
 def _content_version(raw: bytes):
     text=raw.decode('utf-8')
