@@ -5,6 +5,7 @@ const C=window.APP_CONTENT||window.STUDY_CONTENT,KEY='adaptive-study-v22-state',
 // STATE_SCHEMA below is intentionally independent from the app release so existing user progress is preserved.
 if(!C||!Array.isArray(C.subjects)||!Array.isArray(C.chapters)||!Array.isArray(C.questions)){throw new Error('Contenu original non chargé ou incomplet. Recharge la page après remplacement du dossier.')}
 window.APP_CONTENT=C;
+const brandStats=document.querySelector('.brand-sub');if(brandStats)brandStats.textContent=[C.subjects.length+' matières',C.chapters.filter(c=>c.available||(C.coursePages?.[c.id]||[]).length).length+' cours actifs',(C.flashcards||[]).length.toLocaleString('fr-FR')+' flashcards',(C.questions||[]).length.toLocaleString('fr-FR')+' QCM/QROC'].join(' · ');
 const $=id=>document.getElementById(id),now=()=>Date.now(),today=()=>new Date().toISOString().slice(0,10);
 const clamp=(x,a,b)=>Math.max(a,Math.min(b,x)),shuffle=a=>{a=[...a];for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a};
 const median=a=>{if(!a.length)return 0;const b=[...a].sort((x,y)=>x-y),m=Math.floor(b.length/2);return b.length%2?b[m]:(b[m-1]+b[m])/2};
@@ -836,8 +837,9 @@ async function renderReaderPage(){
  if(status){status.className='reader-page-status';status.innerHTML='Chargement de la page…'}
  if(img){
    img.style.display='none';img.alt=coursePageLabel(readerState.chid,readerState.page);img.style.width=`${readerState.zoom}%`;
-   const path=pages[readerState.page],url=await ensureReaderPage(path);
-   if(!readerState)return;
+   const requestedChid=readerState.chid,requestedPage=readerState.page;
+   const path=pages[requestedPage],url=await ensureReaderPage(path);
+   if(!readerState||readerState.chid!==requestedChid||readerState.page!==requestedPage)return;
    if(!url){
      if(status){status.className='reader-page-status error';status.innerHTML=`Cette page n’est pas encore disponible hors ligne.<br><button id="readerRetry" class="btn primary compact">Réessayer</button> <button id="readerSyncNow" class="btn compact">Synchroniser la fiche</button>`;setTimeout(()=>{const r=$('readerRetry'),s=$('readerSyncNow');if(r)r.onclick=renderReaderPage;if(s)s.onclick=()=>cacheCoursePages(readerState.chid,true)},0)}
      return;
@@ -882,10 +884,16 @@ function openCourseReader(chid,page){
  $('readerNext').onclick=()=>{readerState.page++;renderReaderPage()};
  $('readerRange').oninput=e=>{readerState.page=Number(e.target.value)-1;renderReaderPage()};
  $('readerBookmark').onclick=()=>{const old=courseReadingState(chid).saved||[],set=new Set(old);set.has(readerState.page)?set.delete(readerState.page):set.add(readerState.page);saveCourseReadingState(chid,{saved:[...set].sort((a,b)=>a-b)});renderReaderPage()};
- $('readerZoomOut').onclick=()=>{readerState.zoom=clamp(readerState.zoom-25,75,250);$('readerZoomLabel').textContent=readerState.zoom+'%';renderReaderPage()};
- $('readerZoomIn').onclick=()=>{readerState.zoom=clamp(readerState.zoom+25,75,250);$('readerZoomLabel').textContent=readerState.zoom+'%';renderReaderPage()};
+ $('readerZoomOut').onclick=()=>{readerState.zoom=clamp(readerState.zoom-25,100,300);$('readerZoomLabel').textContent=readerState.zoom+'%';$('readerImage').style.width=readerState.zoom+'%'};
+ $('readerZoomIn').onclick=()=>{readerState.zoom=clamp(readerState.zoom+25,100,300);$('readerZoomLabel').textContent=readerState.zoom+'%';$('readerImage').style.width=readerState.zoom+'%'};
  $('readerCache').onclick=()=>cacheCoursePages(chid,true);
- let sx=0;$('readerCanvas').addEventListener('pointerdown',e=>{sx=e.clientX});$('readerCanvas').addEventListener('pointerup',e=>{const dx=e.clientX-sx;if(Math.abs(dx)>70){readerState.page+=dx<0?1:-1;renderReaderPage()}});
+ let sx=0,pinch=null,canvas=$('readerCanvas');
+ canvas.addEventListener('pointerdown',e=>{sx=e.clientX});
+ canvas.addEventListener('pointerup',e=>{const dx=e.clientX-sx;if(readerState?.zoom===100&&Math.abs(dx)>80){readerState.page+=dx<0?1:-1;renderReaderPage()}});
+ const distance=e=>Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
+ canvas.addEventListener('touchstart',e=>{if(e.touches.length===2)pinch={distance:distance(e),zoom:readerState.zoom}}, {passive:true});
+ canvas.addEventListener('touchmove',e=>{if(e.touches.length!==2||!pinch)return;e.preventDefault();readerState.zoom=clamp(Math.round(pinch.zoom*distance(e)/Math.max(1,pinch.distance)),100,300);$('readerImage').style.width=readerState.zoom+'%';$('readerZoomLabel').textContent=readerState.zoom+'%'},{passive:false});
+ canvas.addEventListener('touchend',e=>{if(e.touches.length<2)pinch=null},{passive:true});
  renderReaderPage();
 }
 async function cacheCoursePages(chid,show=true){
