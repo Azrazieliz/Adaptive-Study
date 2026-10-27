@@ -505,3 +505,29 @@ details.sheet-section[open]>summary:after{transform:rotate(0)}
 
 /* v3.26.1 — branding */
 .native-app .brand-title{display:block!important;visibility:visible!important;font-size:18px;font-weight:900}
+
+
+/* Revision workspace: compact, searchable and source-aware */
+.course-workspace{display:grid;grid-template-columns:minmax(250px,290px) minmax(0,1fr);gap:12px;align-items:start}
+.course-library{position:sticky;top:77px;max-height:calc(100dvh - 165px);display:flex;flex-direction:column;min-height:0;gap:5px}
+.course-catalog-list{min-height:0;overflow:auto;display:flex;flex-direction:column;gap:3px;margin-top:8px;scrollbar-width:thin}
+.course-catalog-entry{display:flex;flex-direction:column;align-items:flex-start;gap:3px;text-align:left;flex:0 0 auto;background:transparent;border:1px solid transparent;color:var(--text);padding:10px 9px;border-radius:10px;min-height:53px}
+.course-catalog-entry:hover{background:var(--panel2)}
+.course-catalog-entry.selected{border-color:var(--accent);background:var(--accent-soft)}
+.catalog-title{font-size:13px;line-height:1.35;font-weight:720}
+.catalog-meta{font-size:10px;color:var(--muted);line-height:1.4}
+.course-detail{min-width:0}
+.course-detail-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:9px;padding:9px 12px}
+.course-detail-bar .course-view-tabs{margin:0;display:flex;gap:5px;flex-wrap:wrap}
+.course-detail-bar .course-view-tabs .btn{min-height:36px}
+.course-unavailable{min-height:175px}
+.report-question{margin:10px 0;padding:12px;border:1px solid var(--warn);border-radius:12px;background:var(--panel2)}
+.report-question textarea{min-height:65px}
+@media(max-width:800px){
+ .course-workspace{grid-template-columns:1fr}
+ .course-library{position:static;max-height:none;padding:10px}
+ .course-catalog-list{max-height:230px;overflow-y:auto;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px}
+ .course-catalog-entry{padding:8px;min-height:48px}
+ .course-detail-bar{position:sticky;top:var(--adaptive-top-safe,55px);z-index:15;background:var(--panel)}
+}
+@media(max-width:430px){.course-catalog-list{grid-template-columns:1fr}.course-catalog-entry{min-height:39px;padding:7px}}
