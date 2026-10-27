@@ -967,20 +967,59 @@ function chapterSummary(chid,mode='high'){
  return `<div class="study-sheet course-visual">${heading}${methodologyReminderHtml(chid)}<div class="guide-intro"><b>Cours réorganisé · tous les détails vérifiés</b><span class="badge">${count} éléments</span><p>La FC originale reste accessible pour le texte et les figures dans leur mise en page.</p></div>${(guide.sections||[]).map(section=>guideSection(chid,section,'all')).join('')}</div>`;
 }
 function renderCourse(){
- $('courseContent').innerHTML=`<div class="summary-toolbar"><div class="card flat"><div class="grid"><div class="c5"><label class="lbl">Matière</label><select id="sumSub" class="field">${subOpts()}</select></div><div class="c7"><label class="lbl">Cours</label><select id="sumCh" class="field"></select></div></div><div class="course-view-tabs" role="group" aria-label="Vue du cours"><button id="sumHigh" class="btn primary" aria-pressed="true">Essentiel</button><button id="sumFull" class="btn soft" aria-pressed="false">Complet</button><button id="sumVisual" class="btn soft" aria-pressed="false">PDF original</button></div></div></div><div id="summaryOut"></div>`;
- const subject=$('sumSub'),chapter=$('sumCh'),upd=()=>chapter.innerHTML=chapterOpts(subject.value,false);subject.onchange=()=>{upd();show('high')};upd();
- const buttons={high:$('sumHigh'),all:$('sumFull'),visual:$('sumVisual')};
- const show=mode=>{
-  Object.entries(buttons).forEach(([key,button])=>{button.className='btn '+(key===mode?'primary':'soft');button.setAttribute('aria-pressed',key===mode?'true':'false')});
-  const id=chapter.value;if(!id){$('summaryOut').innerHTML='<div class="empty">Aucune FC installée pour cette matière.</div>';return}
-  $('summaryOut').innerHTML=chapterSummary(id,mode);bindCourseGallery(id);
-  document.querySelectorAll('[data-guide-page]').forEach(b=>b.onclick=()=>openCourseReader(id,Number(b.dataset.guidePage)));
-  document.querySelectorAll('[data-open-course]').forEach(b=>b.onclick=()=>openCourseReader(b.dataset.openCourse));
-  document.querySelectorAll('[data-mindmap]').forEach(b=>b.onclick=()=>openMindMap(b.dataset.mindmap));
-  document.querySelectorAll('[data-course-quiz]').forEach(b=>b.onclick=()=>openQuizFor(chs[b.dataset.courseQuiz].subjectId,b.dataset.courseQuiz));
-  document.querySelectorAll('[data-course-cards]').forEach(b=>b.onclick=()=>startChapterCards(b.dataset.courseCards,50));
- };
- chapter.onchange=()=>show('high');Object.entries(buttons).forEach(([mode,button])=>button.onclick=()=>show(mode));show('high');
+ const all=C.chapters||[],readyCourses=all.filter(c=>c.available||(C.coursePages?.[c.id]||[]).length||C.courseGuides?.[c.id]);
+ const first=readyCourses[0]||all[0],host=$('courseContent');
+ host.innerHTML='<div class="course-workspace"><aside class="course-library card flat"><div class="section-title"><h2 class="grow">Bibliothèque</h2><span class="badge accent">'+readyCourses.length+'/'+all.length+'</span></div><input id="courseSearch" type="search" class="field" autocomplete="off" placeholder="Chercher un cours…"><label class="lbl" for="sumSub">Matière</label><select id="sumSub" class="field"><option value="all">Toutes les matières</option>'+subOpts()+'</select><label class="lbl" for="sumCh">Accès direct</label><select id="sumCh" class="field"></select><div id="courseCatalogList" class="course-catalog-list" aria-label="Liste des cours"></div></aside><div class="course-detail"><div class="course-detail-bar card flat"><div id="courseStatus" class="small grow"></div><div class="course-view-tabs" role="group" aria-label="Vue du cours"><button id="sumHigh" class="btn primary" aria-pressed="true">Essentiel</button><button id="sumFull" class="btn soft" aria-pressed="false">Complet</button><button id="sumVisual" class="btn soft" aria-pressed="false">PDF</button></div></div><div id="summaryOut"></div></div></div>';
+ const subject=$('sumSub'),chapter=$('sumCh'),search=$('courseSearch'),list=$('courseCatalogList');
+ const modes={high:$('sumHigh'),all:$('sumFull'),visual:$('sumVisual')};
+ let selected=first?.id||'',mode='high';
+ const visible=()=>all.filter(c=>(subject.value==='all'||c.subjectId===subject.value)&&(!search.value.trim()||(c.title+' '+(subs[c.subjectId]?.name||'')).toLocaleLowerCase().includes(search.value.trim().toLocaleLowerCase())));
+ function catalog(){
+  const items=visible();
+  list.innerHTML=items.length?items.map(c=>{
+   const pages=(C.coursePages?.[c.id]||[]).length,ready=!!(c.available||pages||C.courseGuides?.[c.id]);
+   const n=(C.flashcards||[]).filter(f=>f.chapterId===c.id).length;
+   const q=(C.questions||[]).filter(x=>x.chapterId===c.id).length;
+   const st=chapterPracticeStats(c.id);
+   return '<button type="button" class="course-catalog-entry '+(selected===c.id?'selected':'')+'" data-catalog-id="'+esc(c.id)+'" aria-current="'+(selected===c.id?'true':'false')+'"><span class="catalog-title">'+esc(c.title)+'</span><span class="catalog-meta">'+esc(subs[c.subjectId]?.name||'')+' · '+(ready?(pages?pages+' p. · ':'')+n+' cartes · '+q+' questions':'source non installée')+(st.n?' · '+st.n+' réponses':'')+'</span></button>';
+  }).join(''):'<div class="empty">Aucun cours correspondant.</div>';
+  list.querySelectorAll('[data-catalog-id]').forEach(b=>b.onclick=()=>selectChapter(b.dataset.catalogId));
+ }
+ function chapters(){
+  const items=all.filter(c=>subject.value==='all'||c.subjectId===subject.value);
+  chapter.innerHTML=items.map(c=>'<option value="'+esc(c.id)+'">'+esc(c.title)+'</option>').join('');
+  if(items.some(c=>c.id===selected))chapter.value=selected;
+  else if(items[0]){selected=items[0].id;chapter.value=selected}
+ }
+ function draw(){
+  const c=chs[selected],out=$('summaryOut');
+  if(!c){out.innerHTML='<div class="empty">Aucun cours.</div>';return}
+  const pages=(C.coursePages?.[selected]||[]).length,ready=!!(c.available||pages||C.courseGuides?.[selected]);
+  $('courseStatus').textContent=(subs[c.subjectId]?.name||'')+' · '+(ready?pages+' pages sources':'Document non installé');
+  Object.entries(modes).forEach(([key,b])=>{b.className='btn '+(key===mode?'primary':'soft');b.setAttribute('aria-pressed',key===mode?'true':'false')});
+  if(!ready){
+   out.innerHTML='<section class="card course-unavailable"><h2>'+esc(c.title)+'</h2><p>Ce cours est référencé, mais sa FC source n’est pas installée dans ce paquet. Aucune synthèse, question ou carte artificielle ne sera affichée.</p><span class="badge">Import PDF requis</span></section>';
+  }else{
+   out.innerHTML=chapterSummary(selected,mode);
+   bindCourseGallery(selected);
+   out.querySelectorAll('[data-guide-page]').forEach(b=>b.onclick=()=>openCourseReader(selected,Number(b.dataset.guidePage)));
+   out.querySelectorAll('[data-open-course]').forEach(b=>b.onclick=()=>openCourseReader(b.dataset.openCourse));
+   out.querySelectorAll('[data-mindmap]').forEach(b=>b.onclick=()=>openMindMap(b.dataset.mindmap));
+   out.querySelectorAll('[data-course-quiz]').forEach(b=>b.onclick=()=>openQuizFor(chs[b.dataset.courseQuiz].subjectId,b.dataset.courseQuiz));
+   out.querySelectorAll('[data-course-cards]').forEach(b=>b.onclick=()=>startChapterCards(b.dataset.courseCards,50));
+  }
+  chapter.value=selected;catalog();
+ }
+ function selectChapter(id){
+  if(!chs[id])return;selected=id;mode='high';
+  if(subject.value!=='all'&&chs[id].subjectId!==subject.value){subject.value=chs[id].subjectId;chapters()}
+  draw();window.scrollTo({top:0,behavior:'instant'});
+ }
+ subject.onchange=()=>{chapters();catalog();draw()};
+ chapter.onchange=()=>selectChapter(chapter.value);
+ search.oninput=catalog;
+ Object.entries(modes).forEach(([key,b])=>b.onclick=()=>{mode=key;draw()});
+ chapters();draw();
 }
 function openOriginalCourse(chid){
  const list=(window.ORIGINAL_CORPUS||[]).filter(q=>q.chapterId===chid);
