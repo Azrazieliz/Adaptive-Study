@@ -85,7 +85,12 @@ def ingest(pdf: Path, ident, app: Path, content: dict, dpi: int, replace: bool):
                 raise ValueError("Empty PDF: " + pdf.name)
             output_paths = []
             for i in range(len(doc)):
-                pix = doc[i].get_pixmap(matrix=fitz.Matrix(dpi / 72, dpi / 72), alpha=False)
+                page = doc[i]
+                # Some FC PDFs declare A4 pages as 3500x5000 *points*. A literal
+                # 165-DPI render would create >70-million-pixel images and stall.
+                # Cap raster size while retaining enough detail for phone reading.
+                scale = min(dpi / 72, 1900 / max(1, page.rect.width), 2700 / max(1, page.rect.height))
+                pix = page.get_pixmap(matrix=fitz.Matrix(scale, scale), alpha=False)
                 filename = f"{i + 1:04d}.jpg"
                 (pages / filename).write_bytes(pix.tobytes("jpg", jpg_quality=86))
                 output_paths.append("assets/course-pages/" + id + "/" + filename)
