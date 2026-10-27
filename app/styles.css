@@ -531,3 +531,8 @@ details.sheet-section[open]>summary:after{transform:rotate(0)}
  .course-detail-bar{position:sticky;top:var(--adaptive-top-safe,55px);z-index:15;background:var(--panel)}
 }
 @media(max-width:430px){.course-catalog-list{grid-template-columns:1fr}.course-catalog-entry{min-height:39px;padding:7px}}
+
+/* PDF reader: both-axis pan and readable answer typography */
+.reader-canvas{touch-action:pan-x pan-y!important;display:block!important;overflow:auto!important}
+.reader-canvas img{max-width:none;transition:none;object-fit:contain}
+.flash .front,.flash .back{white-space:pre-line;overflow-wrap:anywhere}
