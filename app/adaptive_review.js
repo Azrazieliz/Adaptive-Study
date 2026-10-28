@@ -32,7 +32,7 @@ function snapshot(id){
  const days=lastFull?Math.floor((now()-lastFull)/DAY):null;
  const threshold=state.preferences.masteryThreshold;
  return {id,mastery,attempts:r.attempts.length,completedSets:full.length,lastFull,nextDue:due,intervalDays:interval,
-    daysSinceFull:days,reviewNeeded:now()>=due||(mastery!==null&&mastery<threshold&&(!lastFull||now()-lastFull>=DAY)),
+    daysSinceFull:days,reviewNeeded:!lastFull||now()>=due||(mastery!==null&&mastery<threshold&&now()-lastFull>=DAY),
     reason:!lastFull?'Jamais de session complète':now()>=due?'Rappel de révision':mastery!==null&&mastery<threshold?'Maîtrise sous le seuil':'À jour'};
 }
 function chapterTargets(catalogue){
