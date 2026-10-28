@@ -12,3 +12,7 @@ app/content.expanded.json
 __pycache__/
 .DS_Store
 local_instance/
+
+android-wrapper/.gradle/
+android-wrapper/app/build/
+android-wrapper/build/

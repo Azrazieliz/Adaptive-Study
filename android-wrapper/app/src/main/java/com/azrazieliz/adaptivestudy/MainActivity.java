@@ -56,6 +56,7 @@ public class MainActivity extends Activity {
 
             WebSettings s = webView.getSettings();
             s.setJavaScriptEnabled(true);
+            webView.addJavascriptInterface(new StudyBridge(this), "NativeStudy");
             s.setDomStorageEnabled(true);
             s.setDatabaseEnabled(true);
             s.setAllowFileAccess(true);
