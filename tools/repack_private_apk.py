@@ -43,6 +43,17 @@ def repack(shell: Path, app_dir: Path, output: Path) -> None:
             if not path.is_file():
                 continue
             rel = path.relative_to(app_dir).as_posix()
+            # Release package contains only original lesson/addendum PDFs.
+            # Exam PDFs are authoring inputs, not part of the student APK.
+            if rel.startswith("assets/new-course-source/") and rel.lower().endswith(".pdf"):
+                if not Path(rel).name.startswith(("fc-", "addendum-")):
+                    continue
+            if rel.startswith(("assets/new-course-preview/", "assets/archives/", "assets/original_questions/")):
+                continue
+            if rel in ("original_corpus.js", "original_question_adapter.js"):
+                continue
+            if rel.startswith(("content-before-", "content-before-revision-", "flashcard_rebuild_audit")):
+                continue
             arc = WEB_PREFIX + rel
             info = zipfile.ZipInfo(arc)
             info.compress_type = zipfile.ZIP_DEFLATED
