@@ -64,7 +64,7 @@ def repack(shell: Path, app_dir: Path, output: Path) -> None:
             info.external_attr = (path.stat().st_mode & 0xFFFF) << 16
             # Stream large course assets to avoid Windows single-read failures.
             try:
-                with path.open("rb") as source, dst.open(info, "w", force_zip64=True) as target:
+                with path.open("rb") as source, dst.open(info, "w") as target:
                     shutil.copyfileobj(source, target, length=1024 * 1024)
             except OSError as exc:
                 raise OSError(f"Cannot package {path} ({path.stat().st_size} bytes): {exc}") from exc
