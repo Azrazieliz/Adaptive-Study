@@ -12,6 +12,8 @@ import argparse
 from pathlib import Path
 import shutil
 import zipfile
+import json
+import re
 
 SIG_PREFIX = "META-INF/"
 WEB_PREFIX = "assets/www/"
@@ -26,6 +28,48 @@ def clone_info(info: zipfile.ZipInfo) -> zipfile.ZipInfo:
     out.flag_bits = info.flag_bits
     out.compress_type = zipfile.ZIP_STORED if info.filename == "resources.arsc" else info.compress_type
     return out
+
+def student_content_bytes(path: Path) -> bytes:
+    """Keep examination models and private authoring paths off the phone.
+
+    The original 122 PDF records remain in the PC authoring corpus unchanged.
+    No exam-source PDF is copied and no user-watermarked filename is exposed.
+    """
+    raw = path.read_text(encoding="utf-8")
+    prefix = "window.STUDY_CONTENT = "
+    if not raw.startswith(prefix):
+        raise ValueError("Unrecognized content.js format; refusing unsafe package")
+    data = json.loads(raw[len(prefix):].strip().rstrip(";"))
+    source = data.get("courseSourceDocuments", {})
+    data["courseSourceDocuments"] = {
+        chapter: [doc for doc in docs if doc.get("kind") in {"fc", "addendum"}]
+        for chapter, docs in source.items()
+        if any(doc.get("kind") in {"fc", "addendum"} for doc in docs)
+    }
+    def clean(value):
+        if isinstance(value, list):
+            return [clean(v) for v in value]
+        if isinstance(value, dict):
+            result = {}
+            for key, item in value.items():
+                if key == "authoringPath":
+                    continue
+                if key == "sourceFile" and isinstance(item, str):
+                    stem = Path(item.replace(chr(92), "/")).name
+                    lower = stem.lower()
+                    marker = lower.find("_watermarked")
+                    if marker >= 0:
+                        stem = stem[:marker] + ".pdf"
+                    result[key] = stem
+                else:
+                    result[key] = clean(item)
+            return result
+        if isinstance(value, str) and "_watermarked" in value.lower():
+            # Source-document titles may carry identifying watermark suffixes.
+            return re.sub(r"_watermarked[^/\\]*?(?=\.pdf|$)", "", value, flags=re.I)
+        return value
+    data = clean(data)
+    return (prefix + json.dumps(data, ensure_ascii=False, separators=(",", ":")) + ";\n").encode("utf-8")
 
 def repack(shell: Path, app_dir: Path, output: Path) -> None:
     if not shell.is_file():
@@ -64,8 +108,13 @@ def repack(shell: Path, app_dir: Path, output: Path) -> None:
             info.external_attr = (path.stat().st_mode & 0xFFFF) << 16
             # Stream large course assets to avoid Windows single-read failures.
             try:
-                with path.open("rb") as source, dst.open(info, "w") as target:
-                    shutil.copyfileobj(source, target, length=1024 * 1024)
+                if rel == "content.js":
+                    payload = student_content_bytes(path)
+                    with dst.open(info, "w") as target:
+                        target.write(payload)
+                else:
+                    with path.open("rb") as source, dst.open(info, "w") as target:
+                        shutil.copyfileobj(source, target, length=1024 * 1024)
             except OSError as exc:
                 raise OSError(f"Cannot package {path} ({path.stat().st_size} bytes): {exc}") from exc
     with zipfile.ZipFile(tmp, "r") as check:
