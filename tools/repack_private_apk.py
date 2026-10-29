@@ -56,10 +56,18 @@ def repack(shell: Path, app_dir: Path, output: Path) -> None:
                 continue
             arc = WEB_PREFIX + rel
             info = zipfile.ZipInfo(arc)
-            info.compress_type = zipfile.ZIP_DEFLATED
+            # JPEG/WEBP/PDF files are already compressed. Store them directly
+            # to avoid minutes of redundant compression on the phone corpus.
+            info.compress_type = (zipfile.ZIP_STORED if path.suffix.lower() in
+                                  {'.jpg', '.jpeg', '.webp', '.png', '.pdf', '.zip', '.mp4'}
+                                  else zipfile.ZIP_DEFLATED)
             info.external_attr = (path.stat().st_mode & 0xFFFF) << 16
-            with path.open("rb") as f:
-                dst.writestr(info, f.read())
+            # Stream large course assets to avoid Windows single-read failures.
+            try:
+                with path.open("rb") as source, dst.open(info, "w", force_zip64=True) as target:
+                    shutil.copyfileobj(source, target, length=1024 * 1024)
+            except OSError as exc:
+                raise OSError(f"Cannot package {path} ({path.stat().st_size} bytes): {exc}") from exc
     with zipfile.ZipFile(tmp, "r") as check:
         if check.getinfo("resources.arsc").compress_type != zipfile.ZIP_STORED:
             raise SystemExit("resources.arsc was compressed; refusing broken APK")
