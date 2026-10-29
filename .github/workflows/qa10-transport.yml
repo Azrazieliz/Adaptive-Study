@@ -1,0 +1,36 @@
+name: Encrypted Adaptive Study QA10 delivery
+on:
+  push:
+    branches: [qa10-private-delivery-20261029]
+  workflow_dispatch:
+jobs:
+  delivery:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AdaptiveStudy-QA10-encrypted
+          path: qa10-part-*.bin
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 2
+      - name: Gather Android signing utilities
+        shell: bash
+        run: |
+          mkdir -p output-tools/lib
+          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT}}"
+          APK_JAR="$(find "$SDK_ROOT/build-tools" -name apksigner.jar -type f | sort -V | tail -1)"
+          ZIPALIGN="$(find "$SDK_ROOT/build-tools" -name zipalign -type f | sort -V | tail -1)"
+          test -f "$APK_JAR" && test -f "$ZIPALIGN"
+          cp "$APK_JAR" output-tools/lib/apksigner.jar
+          cp "$ZIPALIGN" output-tools/zipalign
+          CPLUS="$(find "$SDK_ROOT" -name 'libc++.so' -type f | head -1)"
+          if [ -n "$CPLUS" ]; then cp "$CPLUS" output-tools/libc++.so; fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AdaptiveStudy-QA10-signing-tools
+          path: output-tools/
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 2
