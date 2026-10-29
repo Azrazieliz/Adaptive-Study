@@ -1,0 +1,17 @@
+name: Encrypted private Adaptive Study QA10 artifact
+on:
+  push:
+    branches: [ "qa10-private-delivery-20261029" ]
+  workflow_dispatch:
+jobs:
+  upload-encrypted:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AdaptiveStudy-QA10-encrypted-transfer
+          path: qa10-part-*.bin
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 2
