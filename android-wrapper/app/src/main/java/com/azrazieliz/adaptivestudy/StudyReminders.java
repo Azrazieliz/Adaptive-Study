@@ -80,13 +80,14 @@ public final class StudyReminders extends BroadcastReceiver {
                 .getString(KEY,"{}"));
             if(!obj.optBoolean("enabled",false))return;
             JSONArray entries=obj.optJSONArray("entries");
+            final int threshold=Math.max(40,Math.min(95,obj.optInt("masteryThreshold",75)));
             int due=0,weak=0;
             String first="";
             if(entries!=null)for(int i=0;i<entries.length();i++){
                 JSONObject entry=entries.optJSONObject(i);
                 if(entry==null||entry.optLong("due",Long.MAX_VALUE)>System.currentTimeMillis())continue;
                 due++;
-                if(entry.optInt("mastery",100)<75)weak++;
+                if(entry.has("mastery")&&!entry.isNull("mastery")&&entry.optInt("mastery",100)<threshold)weak++;
                 if(first.isEmpty())first=entry.optString("title","");
             }
             if(due>0)notifyDue(ctx,due,weak,first);

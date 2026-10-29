@@ -45,7 +45,7 @@ function chapterTargets(catalogue){
 function scheduleNative(catalogue){
  currentCatalogue=catalogue;
  const entries=chapterTargets(catalogue).sort((a,b)=>a.nextDue-b.nextDue).slice(0,100);
- const payload={version:1,enabled:state.preferences.notificationEnabled,entries:entries.map(x=>({id:x.id,title:x.title,due:x.nextDue,mastery:x.mastery,subjectId:x.subjectId}))};
+ const payload={version:1,enabled:state.preferences.notificationEnabled,masteryThreshold:state.preferences.masteryThreshold,entries:entries.map(x=>({id:x.id,title:x.title,due:x.nextDue,mastery:x.mastery,subjectId:x.subjectId}))};
  try{global.NativeStudy?.setReviewSchedule?.(JSON.stringify(payload))}catch(e){console.warn('Native reminder',e)}
  return payload;
 }

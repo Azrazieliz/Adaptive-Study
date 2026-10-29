@@ -9,7 +9,7 @@ const sandbox={console,Date:TestDate,localStorage:{getItem:k=>data.get(k)||null,
 vm.createContext(sandbox);vm.runInContext(fs.readFileSync(file,'utf8'),sandbox);
 const a=sandbox.window.AdaptiveReview;
 const list=[{id:'A',title:'A',subjectId:'phys',available:true,coefficient:5},{id:'B',title:'B',subjectId:'shs',available:true,coefficient:3}];
-a.scheduleNative(list);assert.strictEqual(schedules.at(-1).entries.length,2,'All chapters including unseen must be scheduled');
+a.scheduleNative(list);assert.strictEqual(schedules.at(-1).masteryThreshold,75,'Native reminder threshold must match user setting');assert.strictEqual(schedules.at(-1).entries.length,2,'All chapters including unseen must be scheduled');
 const id=a.startSet('A','questions',12);
 for(let i=0;i<11;i++){const v=a.record('A','q'+i,.8,60,60,'questions',id,12);assert.strictEqual(v.completed,false)}
 assert.strictEqual(a.snapshot('A').completedSets,0,'Full set must require all planned items');
@@ -23,6 +23,7 @@ assert(slowScore.completed&&slowScore.mastery<100,'Slow answer must lower master
 clock+=8*86400000;
 assert(a.chapterTargets(list).find(x=>x.id==='A').reviewNeeded,'7-day overdue detection');
 assert(schedules.length>2,'Native schedule must refresh as answers arrive');
+a.setThreshold(85);a.scheduleNative(list);assert.strictEqual(schedules.at(-1).masteryThreshold,85,'Changed user threshold must be sent to Android');
 const shortId=a.startSet('SHORT','questions',3);
 for(let i=0;i<2;i++)assert.strictEqual(a.record('SHORT','s'+i,1,45,60,'questions',shortId,3).completed,false);
 const shortResult=a.record('SHORT','s2',1,45,60,'questions',shortId,3);
