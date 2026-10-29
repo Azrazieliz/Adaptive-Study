@@ -23,4 +23,10 @@ assert(slowScore.completed&&slowScore.mastery<100,'Slow answer must lower master
 clock+=8*86400000;
 assert(a.chapterTargets(list).find(x=>x.id==='A').reviewNeeded,'7-day overdue detection');
 assert(schedules.length>2,'Native schedule must refresh as answers arrive');
+const shortId=a.startSet('SHORT','questions',3);
+for(let i=0;i<2;i++)assert.strictEqual(a.record('SHORT','s'+i,1,45,60,'questions',shortId,3).completed,false);
+const shortResult=a.record('SHORT','s2',1,45,60,'questions',shortId,3);
+assert.strictEqual(shortResult.completed,true,'A full three-item chapter session must be completable');
+assert.strictEqual(a.snapshot('SHORT').completedSets,1);
+assert(shortResult.mastery<70,'Three correct answers cannot imply complete mastery');
 console.log('ADAPTIVE_TEST_PASS',JSON.stringify({completedSets:a.snapshot('A').completedSets,mastery:a.snapshot('A').mastery,due:a.snapshot('A').nextDue,bridgeUpdates:schedules.length,shsMastery:a.snapshot('B').mastery}));
