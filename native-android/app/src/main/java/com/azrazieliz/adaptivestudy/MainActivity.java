@@ -49,6 +49,7 @@ public class MainActivity extends Activity {
     private final ArrayList<Integer> sessionQuestions=new ArrayList<>(), sessionCards=new ArrayList<>();
     private final Random random=new Random();
 
+    private String installedVersion(){try{return getPackageManager().getPackageInfo(getPackageName(),0).versionName;}catch(Exception e){return "native";}}
     private int dp(float n){return (int)(getResources().getDisplayMetrics().density*n+0.5f);}
     private static String s(JSONObject j,String k){return j==null?"":j.optString(k,"");}
     private static JSONArray arr(JSONObject j,String k){return j==null?null:j.optJSONArray(k);}
@@ -151,7 +152,7 @@ public class MainActivity extends Activity {
         if(corpus==null)return;
         root.removeAllViews();
         titleBar=horizontal();titleBar.setPadding(dp(14),dp(11),dp(14),dp(11));titleBar.setBackgroundColor(BG);
-        LinearLayout tt=vertical();tt.addView(text("Concours — Adaptive Study",16,WHITE,true));tt.addView(text("NATIF • 100 % hors ligne • v3.29.1",11,GREEN,true));
+        LinearLayout tt=vertical();tt.addView(text("Concours — Adaptive Study",16,WHITE,true));tt.addView(text("NATIF • 100 % hors ligne • v"+installedVersion(),11,GREEN,true));
         titleBar.addView(tt,new LinearLayout.LayoutParams(0,-2,1));
         TextView menu=button("≡",false,()->go("CATALOG"));titleBar.addView(menu,new LinearLayout.LayoutParams(dp(44),dp(42)));
         root.addView(titleBar);
