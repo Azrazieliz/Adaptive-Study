@@ -45,11 +45,68 @@ public class MainActivity extends Activity {
     private int pageIndex=0, cardIndex=0, quizIndex=0, quizCorrect=0, quizAnswered=0, cardReviewed=0, boardIndex=0;
     private boolean boardRevealed=true;
     private String boardAnswerDraft="";
-    private long questionStarted=0L;
+    private long questionStarted=0L, questionActiveMs=0L;
+    private double quizScore=0.0;
+    private boolean questionFinalized=false;
+    private TextView questionClock;
+    private final android.os.Handler quizHandler=new android.os.Handler(android.os.Looper.getMainLooper());
+    private final Runnable clockUpdater=new Runnable(){
+        @Override public void run(){
+            if(questionClock!=null&&"QUIZ".equals(screen)&&quizIndex<sessionQuestions.size()){
+                JSONObject q=questions.get(sessionQuestions.get(quizIndex));
+                long elapsed=activeQuestionMs()/1000;
+                int target=targetSeconds(q);
+                long remaining=target-elapsed;
+                String time=fmtSeconds(Math.abs(remaining));
+                questionClock.setText((remaining>=0?"Temps restant : ":"Dépassement : +")+time+
+                    "   •   cible "+fmtSeconds(target));
+                questionClock.setTextColor(remaining>=0?GREEN:RED);
+            }
+            quizHandler.postDelayed(this,1000);
+        }
+    };
     private final ArrayList<Integer> sessionQuestions=new ArrayList<>(), sessionCards=new ArrayList<>();
     private final Random random=new Random();
 
     private String installedVersion(){try{return getPackageManager().getPackageInfo(getPackageName(),0).versionName;}catch(Exception e){return "native";}}
+    private long activeQuestionMs(){
+        return questionActiveMs+(questionStarted>0?Math.max(0,SystemClock.elapsedRealtime()-questionStarted):0);
+    }
+    private static String fmtSeconds(long n){
+        return String.format(Locale.FRANCE,"%02d:%02d",n/60,n%60);
+    }
+    private JSONObject subjectMetadata(String id){
+        JSONArray a=arr(corpus,"subjects");
+        if(a!=null)for(int i=0;i<a.length();i++){
+            JSONObject s=a.optJSONObject(i);
+            if(s!=null&&id.equals(s.optString("id")))return s;
+        }
+        return null;
+    }
+    private int coefficient(String id){
+        JSONObject subj=subjectMetadata(id);
+        return subj==null?1:subj.optInt("coefficient",1);
+    }
+    private int targetSeconds(JSONObject q){
+        if("QROC".equalsIgnoreCase(s(q,"format")))return 600;
+        JSONObject subj=subjectMetadata(s(q,"subjectId"));
+        JSONObject exam=obj(subj,"exam");
+        if(exam!=null&&exam.optDouble("approxItems",0)>0&&exam.optDouble("durationMin",0)>0)
+            return Math.max(10,(int)Math.round(60*exam.optDouble("durationMin")/exam.optDouble("approxItems")));
+        return 90;
+    }
+    @Override protected void onPause(){
+        if("QUIZ".equals(screen)&&!questionFinalized&&questionStarted>0){
+            questionActiveMs+=Math.max(0,SystemClock.elapsedRealtime()-questionStarted);
+            questionStarted=0;
+        }
+        super.onPause();
+    }
+    @Override protected void onResume(){
+        super.onResume();
+        if("QUIZ".equals(screen)&&!questionFinalized&&questionStarted==0&&quizIndex<sessionQuestions.size())
+            questionStarted=SystemClock.elapsedRealtime();
+    }
     private int dp(float n){return (int)(getResources().getDisplayMetrics().density*n+0.5f);}
     private static String s(JSONObject j,String k){return j==null?"":j.optString(k,"");}
     private static JSONArray arr(JSONObject j,String k){return j==null?null:j.optJSONArray(k);}
@@ -66,6 +123,7 @@ public class MainActivity extends Activity {
         if(Build.VERSION.SDK_INT>=30) getWindow().setDecorFitsSystemWindows(false);
         root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setBackgroundColor(BG);
         setContentView(root);
+        quizHandler.post(clockUpdater);
         root.setOnApplyWindowInsetsListener((v,insets)->{
             if(Build.VERSION.SDK_INT>=30){
                 android.graphics.Insets b=insets.getInsets(WindowInsets.Type.systemBars()|WindowInsets.Type.displayCutout());
@@ -186,12 +244,16 @@ public class MainActivity extends Activity {
     }
     private int attempts(String questionId){return prefs.getInt("qa/"+questionId,0);}
     private boolean lastCorrect(String questionId){return prefs.getBoolean("qc/"+questionId,false);}
-    private void recordAnswer(JSONObject question,boolean correct,long durationMs){
+    private void recordAnswer(JSONObject question,double score,long durationMs){
         String id=s(question,"id");SharedPreferences.Editor e=prefs.edit();
         e.putInt("qa/"+id,attempts(id)+1);
-        e.putBoolean("qc/"+id,correct);
-        if(!correct)e.putInt("qe/"+id,prefs.getInt("qe/"+id,0)+1);
-        e.putLong("qt/"+id,Math.max(0,durationMs));e.apply();
+        e.putBoolean("qc/"+id,score>=0.999);
+        e.putFloat("qs/"+id,(float)score);
+        if(score<0.999)e.putInt("qe/"+id,prefs.getInt("qe/"+id,0)+1);
+        e.putLong("qt/"+id,Math.max(0,durationMs));
+        e.putInt("qt_target/"+id,targetSeconds(question));
+        e.putLong("qt_accumulated/"+id,prefs.getLong("qt_accumulated/"+id,0)+durationMs);
+        e.apply();
     }
     private void showHome(){
         heading(body,"Réviser. S'entraîner. Progresser.");
@@ -280,10 +342,55 @@ public class MainActivity extends Activity {
     private boolean isFormulaSubject(String subject){
         return "phys".equals(subject)||"chimie".equals(subject);
     }
+    private View fractionFormula(String formula){
+        String formatted=formula.replace("m1","m₁").replace("m2","m₂").replace("q1","q₁")
+                .replace("q2","q₂").replace("epsilon0","ε₀");
+        int eq=formatted.indexOf('=');
+        int slash=formatted.lastIndexOf('/');
+        if(eq<0||slash<eq)return text(formatted,22,WHITE,true);
+        String leading=formatted.substring(0,eq+1).trim();
+        String numerator=formatted.substring(eq+1,slash).trim();
+        String denominator=formatted.substring(slash+1).trim();
+        if(numerator.length()==0||denominator.length()==0||denominator.length()>22
+          ||numerator.length()>45)return text(formatted,22,WHITE,true);
+        LinearLayout result=horizontal();
+        result.setGravity(Gravity.CENTER_VERTICAL|Gravity.LEFT);
+        TextView lhs=text(leading,22,WHITE,true);
+        LinearLayout.LayoutParams lhsLp=new LinearLayout.LayoutParams(-2,-2);
+        lhsLp.rightMargin=dp(10);result.addView(lhs,lhsLp);
+        LinearLayout frac=vertical();
+        frac.setGravity(Gravity.CENTER);
+        TextView top=text(numerator,21,WHITE,true);
+        top.setGravity(Gravity.CENTER);top.setPadding(dp(5),0,dp(5),dp(5));
+        frac.addView(top,new LinearLayout.LayoutParams(-1,-2));
+        View line=new View(this);line.setBackgroundColor(WHITE);
+        frac.addView(line,new LinearLayout.LayoutParams(-1,dp(2)));
+        TextView bottom=text(denominator,21,WHITE,true);
+        bottom.setGravity(Gravity.CENTER);bottom.setPadding(dp(5),dp(5),dp(5),0);
+        frac.addView(bottom,new LinearLayout.LayoutParams(-1,-2));
+        result.addView(frac,new LinearLayout.LayoutParams(-2,-2));
+        return result;
+    }
+    private String formulaNotes(String raw,String formula){
+        String val=raw==null?"":raw;
+        int before=val.indexOf(" ; ");
+        if(before>=0&&val.substring(0,before).indexOf('=')<0){
+            String note=val.substring(0,before).trim();
+            if(note.length()>4&&note.length()<85)return note;
+        }
+        if(val.startsWith("Toujours attractive"))return "Toujours attractive • portée infinie";
+        return "";
+    }
+
     private String compactFormula(String label,String value,String subject){
         String key=label.toLowerCase(java.util.Locale.ROOT);
         String raw=value==null?"":value;
         if("phys".equals(subject)){
+            if(key.contains("gravitation")&&raw.contains("/r²"))return "|F| = G m₁m₂/r²";
+            if(key.contains("électrostatique")&&key.contains("norme"))
+                return "|F| = |q₁q₂|/(4πε₀r²)";
+            if(key.contains("charge élémentaire")&&raw.contains("1,602"))return "e = 1,602 × 10⁻¹⁹ C";
+            if(key.contains("nombre d’avogadro")||key.contains("nombre d'avogadro"))return "Nₐ = 6,022 × 10²³";
             if(key.equals("vitesse")&&raw.contains("lim("))return "v = dx/dt";
             if(key.equals("accélération")&&raw.contains("lim("))return "a = dv/dt";
             if(key.contains("relation fondamentale")&&raw.contains("dp/dt"))return "ΣF = dp/dt";
@@ -311,6 +418,9 @@ public class MainActivity extends Activity {
         int and=eq.indexOf(" et ",eq.indexOf('=')+1);if(and>0)eq=eq.substring(0,and);
         eq=eq.trim();
         if(eq.length()>80||eq.indexOf('=')<0)return "";
+        String lhs=eq.substring(0,eq.indexOf('=')).trim();
+        if(lhs.length()>18||lhs.contains(" " )&&!lhs.startsWith("|F|")&&!lhs.startsWith("ΣF"))
+            return "";
         if(eq.indexOf('.')>=0&&eq.indexOf('.')<eq.length()-8)return "";
         return eq;
     }
@@ -368,12 +478,9 @@ public class MainActivity extends Activity {
                     formulaBox.setPadding(dp(14),dp(10),dp(14),dp(10));
                     formulaBox.setBackground(bg(PANEL2,0,12));
                     add(formulaBox,text(label,14,BLUE,true));
-                    TextView math=text(formula,22,WHITE,true);
-                    math.setTextIsSelectable(true);add(formulaBox,math);
-                    if(!infoText.equals(formula)&&!infoText.contains("lim(")){
-                        if(infoText.length()<155&&!infoText.contains(formula))
-                            add(formulaBox,text(infoText,13,MUTED,false));
-                    }
+                    add(formulaBox,fractionFormula(formula));
+                    String note=formulaNotes(raw,formula);
+                    if(!note.isEmpty())add(formulaBox,text(note,13,MUTED,false));
                     add(board,formulaBox);
                 }else{
                     boardRow(board,label,infoText,index%2==0);
@@ -393,9 +500,9 @@ public class MainActivity extends Activity {
                     LinearLayout f=vertical();f.setPadding(dp(12),dp(10),dp(12),dp(10));
                     f.setBackground(bg(PANEL2,0,10));
                     add(f,text(label,14,BLUE,true));
-                    add(f,text(formula,21,WHITE,true));
-                    if(!val.equals(formula)&&val.length()<155)
-                        add(f,text(val,13,MUTED,false));
+                    add(f,fractionFormula(formula));
+                    String note=formulaNotes(val,formula);
+                    if(!note.isEmpty())add(f,text(note,13,MUTED,false));
                     add(board,f);
                 }else boardRow(board,label,val,index%2==0);
                 index++;
@@ -629,9 +736,28 @@ public class MainActivity extends Activity {
         String pdf=courseAssets==null?"":courseAssets.optString(currentChapter,"");
         if(pdf.isEmpty()&&meta!=null){JSONObject imp=meta.optJSONObject("importedFullFC");if(imp!=null)pdf=s(imp,"pdf");}
         if(pages!=null&&pages.length()>0){
-            if(pageIndex>=pages.length())pageIndex=pages.length()-1;
-            sub(body,"Pages du cours original : "+pages.length()+" • pincez pour agrandir");
-            showPager(body,pages.length(),false);
+            ArrayList<Integer> activeIndexes=new ArrayList<>();
+            for(int i=0;i<pages.length();i++){
+                int actualPage=i+1;
+                if("biocell_intro".equals(currentChapter)&&
+                    (actualPage==9||actualPage==14||actualPage==17))continue;
+                activeIndexes.add(i);
+            }
+            if(activeIndexes.size()==0){sub(body,"Pages sources indisponibles.");return;}
+            int position=activeIndexes.indexOf(pageIndex);
+            if(position<0){
+                position=0;
+                while(position+1<activeIndexes.size()&&activeIndexes.get(position)<pageIndex)position++;
+                pageIndex=activeIndexes.get(position);
+            }
+            final int where=position;
+            sub(body,"Pages actives du cours : "+activeIndexes.size()+" • pinch zoom");
+            buttons(body,"◀ Précédente",()->{
+                pageIndex=activeIndexes.get(Math.max(0,where-1));go("PAGES");
+            },"Suivante ▶",()->{
+                pageIndex=activeIndexes.get(Math.min(activeIndexes.size()-1,where+1));go("PAGES");
+            });
+            sub(body,(where+1)+" / "+activeIndexes.size());
             drawImage(pages.optString(pageIndex));
         }else if(!pdf.isEmpty()){
             sub(body,"PDF original • rendu Android PdfRenderer");
@@ -651,35 +777,75 @@ public class MainActivity extends Activity {
         }
         return out;
     }
+    private final class ConnectedConceptMap extends FrameLayout {
+        private View centerNode;
+        private final ArrayList<View> satelliteNodes=new ArrayList<>();
+        private final ArrayList<Integer> satelliteColors=new ArrayList<>();
+        ConnectedConceptMap(Context ctx){super(ctx);setWillNotDraw(false);}
+        void center(View v){centerNode=v;}
+        void satellite(View v,int color){satelliteNodes.add(v);satelliteColors.add(color);}
+        @Override protected void dispatchDraw(android.graphics.Canvas canvas){
+            if(centerNode!=null&&getWidth()>0){
+                int[] frame=new int[2],hub=new int[2],node=new int[2];
+                getLocationOnScreen(frame);centerNode.getLocationOnScreen(hub);
+                float cx=hub[0]-frame[0]+centerNode.getWidth()/2f;
+                float cy=hub[1]-frame[1]+centerNode.getHeight();
+                android.graphics.Paint paint=new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+                paint.setStyle(android.graphics.Paint.Style.STROKE);
+                paint.setStrokeWidth(dp(2.5f));
+                for(int i=0;i<satelliteNodes.size();i++){
+                    View card=satelliteNodes.get(i);
+                    if(card.getWidth()==0)continue;
+                    card.getLocationOnScreen(node);
+                    float nx=node[0]-frame[0]+card.getWidth()/2f,ny=node[1]-frame[1];
+                    paint.setColor(satelliteColors.get(i));
+                    android.graphics.Path route=new android.graphics.Path();
+                    route.moveTo(cx,cy);
+                    float halfway=cy+(ny-cy)*0.5f;
+                    route.cubicTo(cx,halfway,nx,halfway,nx,ny);
+                    canvas.drawPath(route,paint);
+                    paint.setStyle(android.graphics.Paint.Style.FILL);
+                    canvas.drawCircle(nx,ny,dp(4),paint);
+                    paint.setStyle(android.graphics.Paint.Style.STROKE);
+                }
+            }
+            super.dispatchDraw(canvas);
+        }
+    }
+
     private void showConceptMap(){
         String courseName=chapterTitle(currentChapter);
         JSONObject chapter=byChapter.get(currentChapter);
         String subject=s(chapter,"subjectId");
         ArrayList<JSONObject> branches=mapBranches();
         heading(body,"Carte des notions");
-        LinearLayout center=panel(body);
+        ConnectedConceptMap graph=new ConnectedConceptMap(this);
+        LinearLayout graphContent=vertical();
+        graphContent.setPadding(dp(1),dp(4),dp(1),dp(6));
+        graph.addView(graphContent,new FrameLayout.LayoutParams(-1,-2));
+        add(body,graph);
+        LinearLayout center=panel(graphContent);
         TextView hub=text(courseName,19,WHITE,true);
         hub.setGravity(Gravity.CENTER);
         hub.setTextAlignment(View.TEXT_ALIGNMENT_CENTER);
         hub.setPadding(dp(12),dp(15),dp(12),dp(15));
         hub.setBackground(bg(PANEL2,BLUE,17));
         add(center,hub);
+        graph.center(hub);
         TextView caption=text(branches.size()+" branches — sélectionnez un domaine",13,MUTED,false);
         caption.setGravity(Gravity.CENTER);add(center,caption);
-        View connector=new View(this);connector.setBackgroundColor(BLUE);
-        LinearLayout.LayoutParams conn=new LinearLayout.LayoutParams(dp(3),dp(17));
-        conn.gravity=Gravity.CENTER_HORIZONTAL;body.addView(connector,conn);
+        gap(graphContent,18);
         if(isMemorySubject(currentChapter)){
             JSONObject pack=boardCatalog==null?null:boardCatalog.optJSONObject(currentChapter);
             JSONArray units=arr(pack,"items");
             if(units!=null&&units.length()>0){
-                add(body,button("Tableaux / planches sources : "+units.length(),true,()->{
+                add(graphContent,button("Tableaux / planches sources : "+units.length(),true,()->{
                     boardIndex=0;boardRevealed=true;go("BOARDS");
                 }));
             }
         }
         if(branches.size()==0){
-            LinearLayout unavailable=panel(body);
+            LinearLayout unavailable=panel(graphContent);
             sub(unavailable,"Pas de branches structurées disponibles : consultez la source originale.");
             add(unavailable,button("Pages originales",true,()->{pageIndex=0;go("PAGES");}));
             return;
@@ -695,10 +861,14 @@ public class MainActivity extends Activity {
                 JSONArray items=arr(sec,"items");
                 LinearLayout box=vertical();
                 box.setPadding(dp(12),dp(12),dp(12),dp(12));
-                box.setBackground(bg(PANEL,Color.rgb(58,84,119),14));
-                TextView ordinal=text(String.format(Locale.ROOT,"%02d",idx+1),13,GREEN,true);
+                int[] palette={Color.rgb(0,213,229),Color.rgb(253,89,183),Color.rgb(250,197,48),Color.rgb(115,239,153),
+                               Color.rgb(171,122,255),Color.rgb(255,147,91),Color.rgb(89,165,255),Color.rgb(230,108,151)};
+                int branchColor=palette[idx%palette.length];
+                box.setBackground(bg(PANEL,branchColor,14));
+                graph.satellite(box,branchColor);
+                TextView ordinal=text(String.format(Locale.ROOT,"%02d",idx+1),13,branchColor,true);
                 add(box,ordinal);
-                TextView name=text(s(sec,"title"),15,WHITE,true);add(box,name);
+                TextView name=text(s(sec,"title"),15,branchColor,true);add(box,name);
                 StringBuilder shortList=new StringBuilder();
                 if(items!=null){
                     for(int j=0;j<Math.min(3,items.length());j++){
@@ -715,7 +885,7 @@ public class MainActivity extends Activity {
                 if(col==0)lp.rightMargin=dp(9);
                 row.addView(box,lp);
             }
-            add(body,row);
+            add(graphContent,row);
         }
         sub(body,"Chaque branche s'ouvre en tableau lisible, sans image à agrandir.");
         add(body,button("Lire les pages originales",false,()->{pageIndex=0;go("PAGES");}));
@@ -827,18 +997,29 @@ public class MainActivity extends Activity {
             sessionQuestions.subList(20,sessionQuestions.size()).clear();
             prefs.edit().putInt("quizoffset/"+ids.hashCode(),offset+20).apply();
         }
-        quizIndex=0;quizCorrect=0;quizAnswered=0;questionStarted=SystemClock.elapsedRealtime();
+        quizIndex=0;quizCorrect=0;quizAnswered=0;quizScore=0;questionFinalized=false;questionActiveMs=0;questionStarted=SystemClock.elapsedRealtime();
         go("QUIZ");
     }
     private void showQuiz(){
         if(quizIndex>=sessionQuestions.size()){
             heading(body,"Session terminée");
-            info(body,"Résultat",quizCorrect+" / "+quizAnswered+" questions évaluées");
+            info(body,"Barème du concours",String.format(Locale.FRANCE,"%.1f / %d points",quizScore,quizAnswered));
+            info(body,"Réponses totalement exactes",quizCorrect+" / "+quizAnswered);
+            sub(body,"QCM : 0 erreur = 1 ; 1 erreur = 0,7 ; 2 erreurs = 0,1 ; 3+ = 0.");
+            long elapsed=0;for(int i=0;i<quizAnswered&&i<sessionQuestions.size();i++){
+                JSONObject old=questions.get(sessionQuestions.get(i));
+                elapsed+=prefs.getLong("qt/"+s(old,"id"),0);
+            }
+            sub(body,"Temps de réponse cumulé : "+fmtSeconds(elapsed/1000));
             buttons(body,"Nouvelle session",()->go("QUIZ_PICK"),"Cours",()->go("CATALOG"));return;
         }
         JSONObject q=questions.get(sessionQuestions.get(quizIndex));
         String chap=s(q,"chapterId");boolean qroc="QROC".equalsIgnoreCase(s(q,"format"));
         sub(body,subjectName(s(q,"subjectId"))+" • "+chapterTitle(chap));
+        sub(body,"Coefficient "+coefficient(s(q,"subjectId"))+" • barème concours");
+        questionClock=text("",15,GREEN,true);add(body,questionClock);
+        int target=targetSeconds(q);long elapsed=activeQuestionMs()/1000;
+        questionClock.setText((elapsed<=target?"Temps restant : ":"Dépassement : +")+fmtSeconds(Math.abs(target-elapsed))+" • cible "+fmtSeconds(target));
         heading(body,"Question "+(quizIndex+1)+" / "+sessionQuestions.size()+(qroc?" • QROC":" • A–E"));
         LinearLayout p=panel(body);
         TextView stem=text(s(q,"stem"),17,WHITE,true);add(p,stem);
@@ -849,10 +1030,12 @@ public class MainActivity extends Activity {
             answer.setMinLines(5);answer.setGravity(Gravity.TOP);answer.setBackground(bg(PANEL2,0,10));answer.setPadding(dp(12),dp(12),dp(12),dp(12));add(p,answer);
             add(p,button("Afficher les éléments attendus",true,()->{
                 if(feedback.getChildCount()>0)return;
+                if(questionStarted>0){questionActiveMs+=SystemClock.elapsedRealtime()-questionStarted;questionStarted=0;}
+                questionFinalized=true;
                 JSONArray pts=arr(q,"expectedPoints");heading(feedback,"Correction : éléments attendus");
                 if(pts!=null)for(int i=0;i<pts.length();i++)info(feedback,"Point "+(i+1),pts.optString(i));
                 String extra=s(q,"explanation");if(!extra.isEmpty())sub(feedback,extra);
-                buttons(feedback,"À revoir",()->finishQuizQuestion(q,false),"Réponse conforme",()->finishQuizQuestion(q,true));
+                buttons(feedback,"À revoir (0)",()->finishQuizQuestion(q,0.0),"Tous les points (1)",()->finishQuizQuestion(q,1.0));
             }));
         }else{
             CheckBox[] boxes=new CheckBox[5];JSONArray options=arr(q,"options");
@@ -867,9 +1050,15 @@ public class MainActivity extends Activity {
                 JSONArray correct=arr(q,"correct");boolean[] keys=new boolean[5];
                 if(correct!=null)for(int i=0;i<correct.length();i++){int idx=correct.optInt(i,-1);if(idx>=0&&idx<5)keys[idx]=true;}
                 boolean okay=true;for(int i=0;i<5;i++)if(boxes[i].isChecked()!=keys[i])okay=false;
-                final boolean result=okay;
+                int errors=0;
+                for(int i=0;i<5;i++)if(boxes[i].isChecked()!=keys[i])errors++;
+                double points=errors==0?1.0:errors==1?0.7:errors==2?0.1:0.0;
+                final double result=points;
                 for(CheckBox box:boxes)box.setEnabled(false);
-                heading(feedback,okay?"Réponse correcte":"À revoir");
+                heading(feedback,String.format(Locale.FRANCE,"Barème : %.1f / 1 — %d erreur(s)",points,errors));
+                if(questionStarted>0){questionActiveMs+=SystemClock.elapsedRealtime()-questionStarted;questionStarted=0;}
+                questionFinalized=true;
+                sub(feedback,"Temps actif : "+fmtSeconds(questionActiveMs/1000)+" • cible "+fmtSeconds(targetSeconds(q)));
                 JSONArray rationales=arr(q,"optionRationales");
                 for(int i=0;i<5;i++){
                     String label=(char)('A'+i)+(keys[i]?" ✓ Vrai":" ✗ Faux");
@@ -884,9 +1073,12 @@ public class MainActivity extends Activity {
         add(p,feedback);
         buttons(body,"Revenir aux questions",()->go("QUIZ_PICK"),"Ouvrir ce cours",()->openLesson(chap));
     }
-    private void finishQuizQuestion(JSONObject q,boolean correct){
-        recordAnswer(q,correct,SystemClock.elapsedRealtime()-questionStarted);
-        quizAnswered++;if(correct)quizCorrect++;quizIndex++;questionStarted=SystemClock.elapsedRealtime();go("QUIZ");
+    private void finishQuizQuestion(JSONObject q,double points){
+        long duration=activeQuestionMs();
+        recordAnswer(q,points,duration);
+        quizAnswered++;quizScore+=points;if(points>=0.999)quizCorrect++;
+        quizIndex++;questionFinalized=false;questionActiveMs=0;questionStarted=SystemClock.elapsedRealtime();
+        go("QUIZ");
     }
     private void startCards(String id){
         ArrayList<Integer> items=cardsByChapter.get(id);
@@ -978,7 +1170,7 @@ public class MainActivity extends Activity {
     }
     private void gradeCard(JSONObject c,int choice){
         String id=s(c,"id");int n=prefs.getInt("cr/"+id,0)+1;
-        long days=choice==0?0:choice==1?1:choice==2?Math.min(30,Math.max(2,n*3)):Math.min(90,Math.max(4,n*7));
+        long days=choice==0?1:choice==1?2:choice==2?4:7;
         long due=System.currentTimeMillis()+days*86400000L;
         SharedPreferences.Editor e=prefs.edit();e.putInt("cr/"+id,n);e.putLong("cd/"+id,due);e.putInt("cg/"+id,choice);e.apply();
         cardReviewed++;cardIndex++;go("CARDS");
