@@ -16,3 +16,8 @@ local_instance/
 android-wrapper/.gradle/
 android-wrapper/app/build/
 android-wrapper/build/
+# Offline native Android private course assets and Gradle output
+native-android/app/src/main/assets/
+native-android/.gradle/
+native-android/build/
+native-android/app/build/
