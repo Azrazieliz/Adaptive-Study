@@ -161,7 +161,7 @@ public class MainActivity extends Activity {
         switch(screen){
             case "HOME":showHome();break;
             case "CATALOG":showCatalog();break;
-            case "LESSON":showLesson();break;
+            case "LESSON":subjectLesson();break;
             case "BOARDS":showBoards();break;
             case "PAGES":showPages(false);break;
             case "MAP":showConceptMap();break;
@@ -275,50 +275,218 @@ public class MainActivity extends Activity {
         });
         update.run();
     }
-    private void openLesson(String id){currentChapter=id;guideMode="ESSENTIAL";boardIndex=0;boardRevealed=true;boardAnswerDraft="";if(isMemorySubject(id)&&boardCatalog!=null&&boardCatalog.has(id))go("BOARDS");else go("LESSON");}
-    private void showLesson(){
+    private void openLesson(String id){currentChapter=id;guideMode="ESSENTIAL";boardIndex=0;boardRevealed=true;boardAnswerDraft="";go("LESSON");}
+    private boolean isFormulaSubject(String subject){
+        return "phys".equals(subject)||"chimie".equals(subject);
+    }
+    private String compactFormula(String label,String value,String subject){
+        String key=label.toLowerCase(java.util.Locale.ROOT);
+        String raw=value==null?"":value;
+        if("phys".equals(subject)){
+            if(key.equals("vitesse")&&raw.contains("lim("))return "v = dx/dt";
+            if(key.equals("accélération")&&raw.contains("lim("))return "a = dv/dt";
+            if(key.contains("relation fondamentale")&&raw.contains("dp/dt"))return "ΣF = dp/dt";
+            if(key.contains("masse constante")&&raw.contains("m·a"))return "ΣF = m × a";
+            if(key.equals("quantité de mouvement")&&raw.contains("m·v"))return "p = m × v";
+            if(key.contains("système isolé")&&raw.contains("m·v"))return "p = constante";
+        }
+        String cleaned=raw.replace("ΣF_ext","ΣF").replace("||F||","|F|")
+            .replace("×10^","×10").replace("dOM/dt","dx/dt");
+        if(cleaned.contains("lim(")||cleaned.contains("δt→0"))return "";
+        int equal=cleaned.indexOf(" = ");
+        if(equal<0)equal=cleaned.indexOf('=');
+        if(equal<0)return "";
+        int start=cleaned.lastIndexOf(':',equal);
+        if(start>=0)start++;
+        else{
+            start=Math.max(0,cleaned.lastIndexOf(';',equal)+1);
+            int open=cleaned.lastIndexOf('(',equal);
+            if(open>=0&&equal-open<18)start=Math.max(start,open+1);
+        }
+        String eq=cleaned.substring(start).trim();
+        int end=eq.indexOf(';');if(end>=0)eq=eq.substring(0,end);
+        int avec=eq.indexOf(" avec ");if(avec>0)eq=eq.substring(0,avec);
+        int ifrom=eq.indexOf(" où ");if(ifrom>0)eq=eq.substring(0,ifrom);
+        int and=eq.indexOf(" et ",eq.indexOf('=')+1);if(and>0)eq=eq.substring(0,and);
+        eq=eq.trim();
+        if(eq.length()>80||eq.indexOf('=')<0)return "";
+        if(eq.indexOf('.')>=0&&eq.indexOf('.')<eq.length()-8)return "";
+        return eq;
+    }
+    private String readableValue(String label,String value,String subject){
+        String raw=value==null?"":value.trim();
+        if("phys".equals(subject)){
+            String low=label.toLowerCase(java.util.Locale.ROOT);
+            if(low.equals("vitesse")&&raw.contains("lim("))return "Vitesse instantanée : variation de la position par rapport au temps.";
+            if(low.equals("accélération")&&raw.contains("lim("))return "Accélération instantanée : variation de la vitesse par rapport au temps.";
+        }
+        return raw.replaceAll("\\s*\\[p\\.?\\s*\\d+\\]","").trim();
+    }
+    private boolean isSequenceSection(String title){
+        String n=title.toLowerCase(java.util.Locale.ROOT);
+        return n.contains("étape")||n.contains("cycle")||n.contains("processus")||
+             n.contains("neurulation")||n.contains("biosynthèse")||n.contains("cascade")||
+             n.contains("historique")||n.contains("chronologie")||n.contains("mécanisme");
+    }
+    private boolean isChronologySection(String title){
+        String n=title.toLowerCase(java.util.Locale.ROOT);
+        return n.contains("histoire")||n.contains("chronolog")||n.contains("législat")||
+               n.contains("évolution")||n.contains("années")||n.contains("historique");
+    }
+    private void boardRow(LinearLayout parent,String label,String value,boolean alternate){
+        boolean longExplanation=value.length()>105||getResources().getConfiguration().fontScale>1.2f;
+        LinearLayout row=longExplanation?vertical():horizontal();
+        row.setGravity(Gravity.TOP);
+        row.setPadding(dp(10),dp(10),dp(10),dp(10));
+        row.setBackground(bg(alternate?PANEL2:Color.rgb(21,39,61),0,9));
+        TextView left=text(label,14,BLUE,true);
+        left.setGravity(Gravity.TOP);
+        left.setPadding(0,0,dp(9),longExplanation?dp(5):0);
+        if(longExplanation)row.addView(left,new LinearLayout.LayoutParams(-1,-2));
+        else row.addView(left,new LinearLayout.LayoutParams(0,-2,0.37f));
+        TextView right=text(value,15,WHITE,false);
+        right.setGravity(Gravity.TOP);right.setTextIsSelectable(true);
+        if(longExplanation)row.addView(right,new LinearLayout.LayoutParams(-1,-2));
+        else row.addView(right,new LinearLayout.LayoutParams(0,-2,0.63f));
+        add(parent,row);
+    }
+    private void subjectBoard(LinearLayout parent,String subject,JSONObject section,ArrayList<JSONObject> chosen){
+        String title=s(section,"title");
+        LinearLayout board=panel(parent);
+        heading(board,title);
+        if("phys".equals(subject)){
+            sub(board,"LOIS ET FORMULES");
+            int index=0;
+            for(JSONObject item:chosen){
+                String label=s(item,"label"),raw=s(item,"value");
+                if(raw.isEmpty())raw=s(item,"text");
+                String formula=compactFormula(label,raw,subject);
+                String infoText=readableValue(label,raw,subject);
+                if(!formula.isEmpty()){
+                    LinearLayout formulaBox=vertical();
+                    formulaBox.setPadding(dp(14),dp(10),dp(14),dp(10));
+                    formulaBox.setBackground(bg(PANEL2,0,12));
+                    add(formulaBox,text(label,14,BLUE,true));
+                    TextView math=text(formula,22,WHITE,true);
+                    math.setTextIsSelectable(true);add(formulaBox,math);
+                    if(!infoText.equals(formula)&&!infoText.contains("lim(")){
+                        if(infoText.length()<155&&!infoText.contains(formula))
+                            add(formulaBox,text(infoText,13,MUTED,false));
+                    }
+                    add(board,formulaBox);
+                }else{
+                    boardRow(board,label,infoText,index%2==0);
+                }
+                index++;
+            }
+            return;
+        }
+        if("chimie".equals(subject)){
+            sub(board,"RÉACTIONS, CONDITIONS ET RÈGLES");
+            int index=0;
+            for(JSONObject item:chosen){
+                String label=s(item,"label"),val=readableValue(label,s(item,"value"),subject);
+                if(val.isEmpty())val=readableValue(label,s(item,"text"),subject);
+                String formula=compactFormula(label,val,subject);
+                if(!formula.isEmpty()){
+                    LinearLayout f=vertical();f.setPadding(dp(12),dp(10),dp(12),dp(10));
+                    f.setBackground(bg(PANEL2,0,10));
+                    add(f,text(label,14,BLUE,true));
+                    add(f,text(formula,21,WHITE,true));
+                    if(!val.equals(formula)&&val.length()<155)
+                        add(f,text(val,13,MUTED,false));
+                    add(board,f);
+                }else boardRow(board,label,val,index%2==0);
+                index++;
+            }
+            return;
+        }
+        boolean sequence=isSequenceSection(title);
+        boolean chronology=isChronologySection(title)&&"shs".equals(subject);
+        String headingType=sequence?"ÉTAPES ET MÉCANISMES":chronology?"REPÈRES CHRONOLOGIQUES":
+            "sp".equals(subject)?"DONNÉES ET COMPARAISONS":
+            "shs".equals(subject)?"TABLEAU DE MÉMORISATION":
+            "histo".equals(subject)?"STRUCTURES ET CARACTÉRISTIQUES":
+            "biocell".equals(subject)?"COMPOSANTS ET FONCTIONS":"NOTIONS ET DÉFINITIONS";
+        sub(board,headingType);
+        for(int i=0;i<chosen.size();i++){
+            JSONObject item=chosen.get(i);
+            String label=s(item,"label"),val=s(item,"value");
+            if(val.isEmpty())val=s(item,"text");
+            val=readableValue(label,val,subject);
+            if(sequence){
+                LinearLayout line=horizontal();
+                line.setGravity(Gravity.TOP);
+                line.setPadding(dp(10),dp(10),dp(10),dp(10));
+                line.setBackground(bg(i%2==0?PANEL2:Color.rgb(21,39,61),0,9));
+                TextView num=text(String.format(java.util.Locale.ROOT,"%02d",i+1),16,GREEN,true);
+                line.addView(num,new LinearLayout.LayoutParams(dp(38),-2));
+                LinearLayout details=vertical();
+                add(details,text(label,14,BLUE,true));
+                TextView v=text(val,15,WHITE,false);v.setTextIsSelectable(true);add(details,v);
+                line.addView(details,new LinearLayout.LayoutParams(0,-2,1f));
+                add(board,line);
+            }else boardRow(board,label,val,i%2==0);
+        }
+    }
+    private void subjectLesson(){
         JSONObject chapter=byChapter.get(currentChapter);
         if(chapter==null){showCatalog();return;}
+        String subject=s(chapter,"subjectId");
         heading(body,s(chapter,"title"));
-        sub(body,subjectName(s(chapter,"subjectId"))+" • cours source uniquement");
-        if(isMemorySubject(currentChapter)){LinearLayout warning=panel(body);heading(warning,"MEMORISATION EXHAUSTIVE");sub(warning,"Apercu partiel seulement : apprentissage de chaque tableau dans la source originale obligatoire.");add(warning,button("ETUDIER LES TABLEAUX ORIGINAUX",true,()->{boardIndex=0;boardRevealed=true;go("BOARDS");}));}
-        buttons(body,"Questions",()->startQuiz(currentChapter),"Flashcards",()->startCards(currentChapter));
+        if(isMemorySubject(currentChapter)){
+            LinearLayout notice=panel(body);
+            sub(notice,"SHS, histologie et biologie cellulaire : toutes les données des tableaux originaux doivent être mémorisées.");
+            add(notice,button("Réviser les tableaux originaux",true,()->{boardIndex=0;boardRevealed=true;go("BOARDS");}));
+        }
         LinearLayout menu=horizontal();
-        String[] labels=isMemorySubject(currentChapter)?new String[]{"Essentiel","Fiche complete","Tableaux","Carte"}:new String[]{"Essentiel","Complet","Pages","Carte mentale"};
-        for(int i=0;i<labels.length;i++){
-            final int v=i;boolean selected=(i==0&&guideMode.equals("ESSENTIAL"))||(i==1&&guideMode.equals("COMPLETE"));
-            TextView t=button(labels[i],selected,()->{
-                if(v==2){if(isMemorySubject(currentChapter)){boardIndex=0;boardRevealed=true;go("BOARDS");}else{pageIndex=0;go("PAGES");}}
-                else if(v==3){pageIndex=0;go("MAP");}
-                else{guideMode=v==0?"ESSENTIAL":"COMPLETE";go("LESSON");}
+        String[] names={"Essentiel","Complet","Pages","Carte"};
+        for(int i=0;i<names.length;i++){
+            final int choice=i;
+            boolean active=i==0&&"ESSENTIAL".equals(guideMode)||i==1&&"COMPLETE".equals(guideMode);
+            TextView tab=button(names[i],active,()->{
+                if(choice==2){pageIndex=0;go("PAGES");}
+                else if(choice==3){go("MAP");}
+                else{guideMode=choice==0?"ESSENTIAL":"COMPLETE";go("LESSON");}
             });
-            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(45),1);lp.rightMargin=dp(4);menu.addView(t,lp);
+            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(47),1);
+            if(i<names.length-1)lp.rightMargin=dp(6);
+            menu.addView(tab,lp);
         }
         add(body,menu);
-        JSONObject g=guides==null?null:guides.optJSONObject(currentChapter);
-        if(g==null){LinearLayout p=panel(body);info(p,"Guide dense","Aucune synthèse vérifiée disponible pour ce cours. Consultez les pages sources.");return;}
-        JSONArray sections=arr(g,"sections");
-        int total=0,shown=0;
-        if(sections!=null)for(int i=0;i<sections.length();i++){
-            JSONObject section=sections.optJSONObject(i);if(section==null)continue;
-            JSONArray items=arr(section,"items");if(items==null||items.length()==0)continue;
-            LinearLayout pp=panel(body);heading(pp,s(section,"title"));
-            int local=0;
-            for(int j=0;j<items.length();j++){
-                JSONObject item=items.optJSONObject(j);if(item==null)continue;total++;
-                boolean high=item.optInt("priority",1)>=2;
-                if(guideMode.equals("ESSENTIAL")&&!high)continue;
-                if(guideMode.equals("ESSENTIAL")&&shown>=42)continue;
-                String label=s(item,"label"),val=s(item,"value");
-                if(val.isEmpty())val=s(item,"text");if(label.isEmpty()&&val.isEmpty())continue;
-                info(pp,label.isEmpty()?"À retenir":label,val+(item.has("page")?"  [p. "+item.optInt("page")+"]":""));
-                shown++;local++;
-            }
-            if(local==0)body.removeView(pp);
+        JSONObject guide=guides==null?null:guides.optJSONObject(currentChapter);
+        JSONArray sections=arr(guide,"sections");
+        if(sections==null||sections.length()==0){
+            LinearLayout missing=panel(body);
+            sub(missing,"Fiche structurée indisponible. Les pages originales restent accessibles.");
+            add(missing,button("Lire la source",true,()->{pageIndex=0;go("PAGES");}));
+            return;
         }
-        if(shown==0){sub(body,"Aucun repère prioritaire indiqué ; consultez le cours complet.");}
-        else sub(body,shown+" repères affichés • version "+(guideMode.equals("ESSENTIAL")?"essentielle":"complète")+".");
+        int displayed=0,total=0;
+        boolean essential="ESSENTIAL".equals(guideMode);
+        int maxPerSection=Math.max(2,56/Math.max(1,sections.length()));
+        for(int j=0;j<sections.length();j++){
+            JSONObject section=sections.optJSONObject(j);if(section==null)continue;
+            JSONArray items=arr(section,"items");if(items==null)continue;
+            ArrayList<JSONObject> selected=new ArrayList<>();
+            for(int k=0;k<items.length();k++){
+                JSONObject item=items.optJSONObject(k);if(item==null)continue;
+                String value=s(item,"value");if(value.isEmpty())value=s(item,"text");
+                if(value.isEmpty())continue;
+                total++;
+                if(essential&&item.optInt("priority",1)<2)continue;
+                if(essential&&selected.size()>=maxPerSection)continue;
+                selected.add(item);displayed++;
+            }
+            if(!selected.isEmpty())subjectBoard(body,subject,section,selected);
+        }
+        if(displayed==0)sub(body,"Aucun repère sélectionné. Consulter le mode Complet ou les pages.");
+        if(essential)
+            sub(body,"Essentiel : "+displayed+" repères sélectionnés. Le mode Complet contient les "+total+" repères structurés actuellement disponibles.");
+        else
+            sub(body,""+displayed+" repères structurés disponibles. La fidélité et l'exhaustivité doivent être vérifiées contre le cours original.");
     }
+
     private boolean isMemorySubject(String id){
         JSONObject chapter=byChapter.get(id);
         String subject=s(chapter,"subjectId");
@@ -454,7 +622,7 @@ public class MainActivity extends Activity {
     }
     private void showPages(boolean map){
         heading(body,chapterTitle(currentChapter));
-        if(map){showMap();return;}
+        if(map){showConceptMap();return;}
         JSONArray pages=mediaPages==null?null:mediaPages.optJSONArray(currentChapter);
         JSONObject meta=courseMeta==null?null:courseMeta.optJSONObject(currentChapter);
         String pdf=courseAssets==null?"":courseAssets.optString(currentChapter,"");
@@ -483,112 +651,96 @@ public class MainActivity extends Activity {
         return out;
     }
     private void showConceptMap(){
-        heading(body,chapterTitle(currentChapter));
-        sub(body,"Carte de navigation interactive - structure native sans image compressee");
+        String courseName=chapterTitle(currentChapter);
         JSONObject chapter=byChapter.get(currentChapter);
-        boolean critical=isMemorySubject(currentChapter);
-        JSONObject pack=boardCatalog==null?null:boardCatalog.optJSONObject(currentChapter);
-        JSONArray units=arr(pack,"items");
+        String subject=s(chapter,"subjectId");
         ArrayList<JSONObject> branches=mapBranches();
-        LinearLayout top=panel(body);
-        if(critical) {
-            heading(top,"Objectif : restitution exhaustive");
-            sub(top,"Une carte sert a vous reperer. Elle n'est PAS une fiche de memorisation complete. Apprenez chaque tableau et chaque ligne de la source.");
-            if(units!=null&&units.length()>0)add(top,button("OUVRIR LES "+units.length()+" PLANCHES SOURCES",true,()->{boardIndex=0;boardRevealed=true;go("BOARDS");}));
-        }else{
-            heading(top,"Vue d'ensemble : "+branches.size()+" domaines");
-            sub(top,"Branches fondees sur les guides structures; contenus detaillees avec leurs pages d'origine.");
-        }
-        buttons(body,"Planche originale",()->{pageIndex=0;go("PAGES");},"Retour au cours",()->go("LESSON"));
-        if(critical&&units!=null&&units.length()>0){
-            heading(body,"Plan integral par tableau / page");
-            sub(body,"Chaque unite est liee a la page de la source. Les noms de branches sont des reperes et non le contenu integral.");
-            for(int i=0;i<units.length();i++){
-                final int chosen=i;
-                JSONObject item=units.optJSONObject(i);if(item==null)continue;
-                LinearLayout card=panel(body);
-                LinearLayout header=horizontal();
-                TextView ordinal=text(String.format(java.util.Locale.ROOT,"%02d",i+1),16,BLUE,true);
-                ordinal.setBackground(bg(PANEL2,0,11));ordinal.setGravity(Gravity.CENTER);
-                header.addView(ordinal,new LinearLayout.LayoutParams(dp(46),dp(48)));
-                TextView title=text(s(item,"title"),15,WHITE,true);title.setPadding(dp(11),0,0,0);
-                header.addView(title,new LinearLayout.LayoutParams(0,-2,1));add(card,header);
-                JSONArray checks=arr(item,"checkpoints");
-                StringBuilder concepts=new StringBuilder();
-                if(checks!=null)for(int j=0;j<Math.min(3,checks.length());j++){
-                    if(j>0)concepts.append("  /  ");concepts.append(checks.optString(j));
-                }
-                if(concepts.length()>0)sub(card,concepts.toString());
-                sub(card,"Page originale "+item.optInt("sourcePage",i+1)+" - maitrise integralement exigee");
-                add(card,button("Ouvrir et restituer le tableau",false,()->{
-                    boardIndex=chosen;boardRevealed=true;boardAnswerDraft="";go("BOARDS");
+        heading(body,"Carte des notions");
+        LinearLayout center=panel(body);
+        TextView hub=text(courseName,19,WHITE,true);
+        hub.setGravity(Gravity.CENTER);
+        hub.setTextAlignment(View.TEXT_ALIGNMENT_CENTER);
+        hub.setPadding(dp(12),dp(15),dp(12),dp(15));
+        hub.setBackground(bg(PANEL2,BLUE,17));
+        add(center,hub);
+        TextView caption=text(branches.size()+" branches — sélectionnez un domaine",13,MUTED,false);
+        caption.setGravity(Gravity.CENTER);add(center,caption);
+        View connector=new View(this);connector.setBackgroundColor(BLUE);
+        LinearLayout.LayoutParams conn=new LinearLayout.LayoutParams(dp(3),dp(17));
+        conn.gravity=Gravity.CENTER_HORIZONTAL;body.addView(connector,conn);
+        if(isMemorySubject(currentChapter)){
+            JSONObject pack=boardCatalog==null?null:boardCatalog.optJSONObject(currentChapter);
+            JSONArray units=arr(pack,"items");
+            if(units!=null&&units.length()>0){
+                add(body,button("Tableaux / planches sources : "+units.length(),true,()->{
+                    boardIndex=0;boardRevealed=true;go("BOARDS");
                 }));
             }
         }
-        if(!branches.isEmpty()&&(units==null||units.length()==0||!critical)){
-            heading(body,critical?"Reperes structuraux supplementaires":"Branches conceptuelles");
-            for(int i=0;i<branches.size();i++){
-                final int branch=i;
-                JSONObject sec=branches.get(i);JSONArray items=arr(sec,"items");
-                LinearLayout card=panel(body);
-                String name=s(sec,"title");
-                TextView label=text((i+1)+". "+name,16,BLUE,true);add(card,label);
-                sub(card,items.length()+" notions distinguees dans le guide");
-                StringBuilder tags=new StringBuilder();
-                for(int j=0;j<Math.min(items.length(),4);j++){
-                    JSONObject item=items.optJSONObject(j);
-                    if(item==null)continue;
-                    if(tags.length()>0)tags.append("  •  ");
-                    tags.append(s(item,"label"));
-                }
-                if(tags.length()>0)sub(card,tags.toString());
-                add(card,button("Deployer cette branche",false,()->{mapSectionIndex=branch;go("MAP_DETAIL");}));
-            }
+        if(branches.size()==0){
+            LinearLayout unavailable=panel(body);
+            sub(unavailable,"Pas de branches structurées disponibles : consultez la source originale.");
+            add(unavailable,button("Pages originales",true,()->{pageIndex=0;go("PAGES");}));
+            return;
         }
-        if(branches.isEmpty()&&(units==null||units.length()==0))sub(body,"Aucun plan source disponible pour ce cours.");
+        for(int i=0;i<branches.size();i+=2){
+            LinearLayout row=horizontal();row.setGravity(Gravity.TOP);
+            for(int col=0;col<2;col++){
+                int idx=i+col;
+                if(idx>=branches.size()){
+                    row.addView(new View(this),new LinearLayout.LayoutParams(0,dp(8),1));continue;
+                }
+                JSONObject sec=branches.get(idx);
+                JSONArray items=arr(sec,"items");
+                LinearLayout box=vertical();
+                box.setPadding(dp(12),dp(12),dp(12),dp(12));
+                box.setBackground(bg(PANEL,Color.rgb(58,84,119),14));
+                TextView ordinal=text(String.format(Locale.ROOT,"%02d",idx+1),13,GREEN,true);
+                add(box,ordinal);
+                TextView name=text(s(sec,"title"),15,WHITE,true);add(box,name);
+                StringBuilder shortList=new StringBuilder();
+                if(items!=null){
+                    for(int j=0;j<Math.min(3,items.length());j++){
+                        JSONObject item=items.optJSONObject(j);
+                        if(item==null)continue;
+                        if(shortList.length()>0)shortList.append("\n");
+                        shortList.append("• ").append(s(item,"label"));
+                    }
+                }
+                TextView sample=text(shortList.toString(),12,MUTED,false);
+                sample.setMaxLines(6);add(box,sample);
+                add(box,button("Ouvrir",false,()->{mapSectionIndex=idx;go("MAP_DETAIL");}));
+                LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,-2,1);
+                if(col==0)lp.rightMargin=dp(9);
+                row.addView(box,lp);
+            }
+            add(body,row);
+        }
+        sub(body,"Chaque branche s'ouvre en tableau lisible, sans image à agrandir.");
+        add(body,button("Lire les pages originales",false,()->{pageIndex=0;go("PAGES");}));
     }
     private void showConceptBranch(){
         ArrayList<JSONObject> branches=mapBranches();
         if(branches.isEmpty()){go("MAP");return;}
         mapSectionIndex=Math.min(branches.size()-1,Math.max(0,mapSectionIndex));
         JSONObject section=branches.get(mapSectionIndex);
+        JSONObject chapter=byChapter.get(currentChapter);
+        String subject=s(chapter,"subjectId");
         heading(body,chapterTitle(currentChapter));
-        sub(body,"Branche "+(mapSectionIndex+1)+" / "+branches.size());
-        LinearLayout title=panel(body);
-        heading(title,s(section,"title"));
+        sub(body,"Notion "+(mapSectionIndex+1)+" / "+branches.size());
+        buttons(body,"← Carte",()->go("MAP"),"Pages originales",()->{pageIndex=0;go("PAGES");});
         JSONArray items=arr(section,"items");
-        sub(title,items.length()+" notions avec texte complet du guide et renvoi a leur page source.");
-        buttons(body,"Branche precedente",()->{mapSectionIndex=Math.max(0,mapSectionIndex-1);go("MAP_DETAIL");},
-                      "Branche suivante",()->{mapSectionIndex=Math.min(branches.size()-1,mapSectionIndex+1);go("MAP_DETAIL");});
-        add(body,button("Revenir a toutes les branches",false,()->go("MAP")));
-        for(int j=0;j<items.length();j++){
-            JSONObject item=items.optJSONObject(j);if(item==null)continue;
-            String val=s(item,"value");if(val.isEmpty())val=s(item,"text");
-            LinearLayout node=panel(body);
-            TextView label=text((j+1)+". "+s(item,"label"),15,BLUE,true);add(node,label);
-            TextView detail=text(val,15,WHITE,false);add(node,detail);
-            int sourcePage=item.optInt("page",0);
-            if(sourcePage>0){
-                add(node,button("Ouvrir la page FC "+sourcePage,false,()->{pageIndex=sourcePage-1;go("PAGES");}));
-            }else sub(node,"Page source non specifiee : ne pas attribuer de provenance presumee.");
+        ArrayList<JSONObject> content=new ArrayList<>();
+        if(items!=null)for(int j=0;j<items.length();j++){
+            JSONObject it=items.optJSONObject(j);if(it!=null)content.add(it);
         }
-        if(isMemorySubject(currentChapter)){
-            add(body,button("Restituer les tableaux sources (obligatoire)",true,()->{boardIndex=0;boardRevealed=true;go("BOARDS");}));
-        }
+        subjectBoard(body,subject,section,content);
+        buttons(body,"← Précédent",()->{mapSectionIndex=Math.max(0,mapSectionIndex-1);go("MAP_DETAIL");},
+                "Suivant →",()->{mapSectionIndex=Math.min(branches.size()-1,mapSectionIndex+1);go("MAP_DETAIL");});
+        if(isMemorySubject(currentChapter))
+            add(body,button("Mémorisation des tableaux originaux",true,()->{boardIndex=0;boardRevealed=true;go("BOARDS");}));
     }
 
-    private void showMap(){
-        JSONObject m=mindmaps==null?null:mindmaps.optJSONObject(currentChapter);
-        if(m==null){sub(body,"Carte mentale indisponible.");return;}
-        ArrayList<String> paths=new ArrayList<>();
-        String p=s(m,"path");if(!p.isEmpty())paths.add(p);
-        JSONArray subs=arr(m,"subMaps");if(subs!=null)for(int i=0;i<subs.length();i++){JSONObject x=subs.optJSONObject(i);if(x!=null&&!s(x,"path").isEmpty())paths.add(s(x,"path"));}
-        if(paths.isEmpty()){sub(body,"Aucune image de carte disponible.");return;}
-        pageIndex=Math.min(pageIndex,paths.size()-1);
-        sub(body,"Carte mentale • "+(pageIndex+1)+"/"+paths.size()+" • zoom par pincement");
-        showPager(body,paths.size(),true);
-        drawImage(paths.get(pageIndex));
-    }
     private void showPager(LinearLayout target,int n,boolean map){
         buttons(target,"◀ Page précédente",()->{if(pageIndex>0){pageIndex--;go(map?"MAP":"PAGES");}},
                 "Page suivante ▶",()->{if(pageIndex<n-1){pageIndex++;go(map?"MAP":"PAGES");}});
