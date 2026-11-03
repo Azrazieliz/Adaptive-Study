@@ -148,6 +148,7 @@ public class MainActivity extends Activity {
                 loadOriginalExamCatalog();
                 loadComprehensionGuides();
                 loadOriginalQuestions();
+                loadFullLessonIndexes();
                 runOnUiThread(this::render);
             }catch(Exception e){
                 runOnUiThread(()->{root.removeAllViews();TextView err=text("Impossible de charger les cours hors ligne : "+e,16,RED,false);root.addView(err);});
@@ -374,6 +375,112 @@ public class MainActivity extends Activity {
         },"OriginalExamPdf").start();
     }
 
+
+    private JSONObject essentialSelection,completePageIndex;
+    private void loadFullLessonIndexes()throws Exception{
+        essentialSelection=readJsonAsset("essential_study_selection_v3310.json").optJSONObject("courses");
+        completePageIndex=readJsonAsset("complete_source_page_index_v3310.json").optJSONObject("courses");
+    }
+    private JSONObject readJsonAsset(String path)throws Exception{
+        try(InputStream in=getAssets().open(path);
+            ByteArrayOutputStream out=new ByteArrayOutputStream()){
+            byte[] b=new byte[32768];int n;
+            while((n=in.read(b))!=-1)out.write(b,0,n);
+            return new JSONObject(new String(out.toByteArray(),"UTF-8"));
+        }
+    }
+    private void showCompleteSourceReader(JSONArray originalPages,JSONObject guide,String subject){
+        heading(body,"Cours intégral — sources et explications");
+        int n=originalPages==null?0:originalPages.length();
+        JSONObject entry=completePageIndex==null?null:completePageIndex.optJSONObject(currentChapter);
+        JSONObject meta=courseMeta==null?null:courseMeta.optJSONObject(currentChapter);
+        LinearLayout summary=panel(body);
+        info(summary,"Pages du cours",String.valueOf(n));
+        JSONArray all=arr(guide,"sections");
+        int count=0;
+        if(all!=null)for(int j=0;j<all.length();j++){
+            JSONArray items=arr(all.optJSONObject(j),"items");
+            if(items!=null)count+=items.length();
+        }
+        info(summary,"Notions structurées",String.valueOf(count));
+        sub(summary,"Le mode Complet contient les images originales de chaque page et les notions déjà transcrites. Les pages non encore textualisées restent consultables dans leur intégralité.");
+        if(meta!=null&&meta.optBoolean("isComposite",false)){
+            JSONArray related=arr(meta,"compositeParts");
+            sub(summary,"Regroupement thématique de FC déjà fournies — chaque page conserve son cours d'origine.");
+            if(related!=null)for(int i=0;i<related.length();i++){
+                JSONObject part=related.optJSONObject(i);if(part==null)continue;
+                String id=s(part,"sourceChapter");
+                add(summary,button(s(part,"sourceTitle")+" — "+part.optInt("pages")+" pages",false,()->openLesson(id)));
+            }
+        }
+        buttons(summary,"Texte pour comprendre",()->{guideMode="UNDERSTAND";go("LESSON");},
+            "Toutes les notions structurées",()->{guideMode="FULL_FACTS";go("LESSON");});
+        if(n<=0){sub(body,"Source complète non disponible dans cette entrée.");return;}
+        int perView=2;
+        pageIndex=Math.max(0,Math.min(n-1,pageIndex));
+        int start=(pageIndex/perView)*perView;
+        int end=Math.min(n,start+perView);
+        LinearLayout navPanel=panel(body);
+        heading(navPanel,"Pages "+(start+1)+" à "+end+" sur "+n);
+        buttons(navPanel,"◀ Pages précédentes",()->{
+            pageIndex=Math.max(0,start-perView);go("LESSON");
+        },"Pages suivantes ▶",()->{
+            pageIndex=Math.min(n-1,start+perView);go("LESSON");
+        });
+        LinearLayout jump=horizontal();
+        EditText number=new EditText(this);
+        number.setSingleLine(true);
+        number.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        number.setText(String.valueOf(start+1));
+        number.setHint("Page 1–"+n);
+        number.setTextColor(WHITE);
+        number.setTextSize(16);
+        number.setBackground(bg(PANEL2,0,9));
+        number.setPadding(dp(13),dp(9),dp(13),dp(9));
+        jump.addView(number,new LinearLayout.LayoutParams(0,dp(48),1));
+        TextView go=button("Aller à la page",true,()->{
+            int next;
+            try{next=Integer.parseInt(number.getText().toString().trim());}
+            catch(Exception ignored){next=start+1;}
+            pageIndex=Math.max(0,Math.min(n-1,next-1));
+            go("LESSON");
+        });
+        LinearLayout.LayoutParams right=new LinearLayout.LayoutParams(dp(135),dp(48));
+        right.leftMargin=dp(6);jump.addView(go,right);add(navPanel,jump);
+        JSONObject pageEntries=entry==null?null:obj(entry,"pages");
+        for(int p=start;p<end;p++){
+            int originalPage=p+1;
+            JSONObject page=pageEntries==null?null:pageEntries.optJSONObject(String.valueOf(originalPage));
+            LinearLayout pageCard=panel(body);
+            heading(pageCard,"Page "+originalPage+" / "+n);
+            JSONObject part=page==null?null:obj(page,"sourcePart");
+            if(part!=null){
+                int sourcePage=originalPage-part.optInt("startPage")+1;
+                sub(pageCard,"FC source : "+s(part,"sourceTitle")+" • page "+sourcePage+"/"+part.optInt("pages"));
+            }
+            JSONArray facts=arr(page,"facts");
+            if(facts!=null&&facts.length()>0){
+                sub(pageCard,"Notions transcrites de cette page : "+facts.length());
+                for(int j=0;j<facts.length();j++){
+                    JSONObject f=facts.optJSONObject(j);
+                    if(f==null||f.optBoolean("isAdministrative",false))continue;
+                    String v=s(f,"value");
+                    String label=s(f,"label");
+                    if(v.isEmpty())continue;
+                    info(pageCard,label,readableValue(label,v,subject));
+                }
+            }else sub(pageCard,"Aucun texte intégral vérifié pour cette page ; l'image source complète suit.");
+            drawImageInto(pageCard,originalPages.optString(p));
+        }
+        LinearLayout footer=panel(body);
+        buttons(footer,"◀ Pages précédentes",()->{
+            pageIndex=Math.max(0,start-perView);go("LESSON");
+        },"Pages suivantes ▶",()->{
+            pageIndex=Math.min(n-1,start+perView);go("LESSON");
+        });
+        add(footer,button("Lire le cours comme un texte",false,()->{guideMode="UNDERSTAND";go("LESSON");}));
+    }
+
     private JSONObject comprehensionGuides;
     private void loadComprehensionGuides()throws Exception{
         try(InputStream in=getAssets().open("comprehension_texts.json");
@@ -419,7 +526,10 @@ public class MainActivity extends Activity {
         }
         sub(intro,entry.optJSONArray("sections")==null?"":entry.optJSONArray("sections").length()+" parties");
         sub(intro,entry.optInt("paragraphCount")+" paragraphes • "+sourceFacts+
-              " faits réintégrés"+(sourcePages>0?" • "+sourcePages+" pages sources":""));
+              " faits structurés"+(sourcePages>0?" • "+sourcePages+" pages sources":""));
+        add(intro,button("Cours original intégral — toutes les pages",true,()->{
+            pageIndex=0;guideMode="COMPLETE";go("LESSON");
+        }));
         TextView reasoning=text(s(entry,"readingStrategy"),14,BLUE,false);
         reasoning.setPadding(dp(8),dp(11),dp(8),dp(11));
         reasoning.setLineSpacing(dp(4),1.08f);
@@ -488,8 +598,8 @@ public class MainActivity extends Activity {
         }
         LinearLayout close=panel(body);
         sub(close,"Ce texte n'ajoute pas de chiffres, de processus ou de détails médicaux extérieurs aux supports actuellement intégrés. Les figures et tableaux originaux restent indispensables.");
-        buttons(close,"Complet (tableaux)",()->{guideMode="COMPLETE";go("LESSON");},
-                "Pages sources",()->{pageIndex=0;go("PAGES");});
+        buttons(close,"Complet (sources et textes)",()->{pageIndex=0;guideMode="COMPLETE";go("LESSON");},
+                "Toutes les notions",()->{guideMode="FULL_FACTS";go("LESSON");});
     }
 
     private final ArrayList<JSONObject> originalQuestionItems=new ArrayList<>(),originalSession=new ArrayList<>();
@@ -1098,15 +1208,25 @@ public class MainActivity extends Activity {
             JSONObject ss=sections.optJSONObject(ii);
             JSONArray list=arr(ss,"items");if(list!=null)available+=list.length();
         }
-        if(sourceCount>0&&available<sourceCount*3){
+        if(sourceCount>0&&available<sourceCount*3&&!"COMPLETE".equals(guideMode)){
             LinearLayout warning=panel(body);
-            heading(warning,"Couverture insuffisante");
-            sub(warning,available+" points structurés pour "+sourceCount+" pages sources. Cette leçon ne peut pas être considérée comme complète.");
-            add(warning,button("Consulter les pages sources",true,()->{pageIndex=0;go("PAGES");}));
+            heading(warning,"Texte structuré et document source");
+            sub(warning,available+" notions transcrites • "+sourceCount+" pages sources intégralement consultables dans Complet.");
+            add(warning,button("Lire toutes les pages sources",true,()->{pageIndex=0;guideMode="COMPLETE";go("LESSON");}));
         }
         int displayed=0,total=0;
+        if("COMPLETE".equals(guideMode)){
+            showCompleteSourceReader(originalPages,guide,subject);return;
+        }
         boolean essential="ESSENTIAL".equals(guideMode);
-        int maxPerSection=Math.max(1,Math.min(3,30/Math.max(1,sections.length())));
+        JSONObject selection=essentialSelection==null?null:essentialSelection.optJSONObject(currentChapter);
+        JSONArray chosen=arr(selection,"indices");
+        HashSet<String> selectedKeys=new HashSet<>();
+        if(chosen!=null)for(int i=0;i<chosen.length();i++){
+            JSONArray pair=chosen.optJSONArray(i);
+            if(pair!=null&&pair.length()>=2)selectedKeys.add(pair.optInt(0)+":"+pair.optInt(1));
+        }
+        if(!essential)heading(body,"Toutes les notions structurées");
         for(int j=0;j<sections.length();j++){
             JSONObject section=sections.optJSONObject(j);if(section==null)continue;
             JSONArray items=arr(section,"items");if(items==null)continue;
@@ -1116,23 +1236,24 @@ public class MainActivity extends Activity {
                 String value=s(item,"value");if(value.isEmpty())value=s(item,"text");
                 if(value.isEmpty())continue;
                 total++;
-                if(essential&&item.optInt("priority",1)<2)continue;
-                if(essential&&selected.size()>=maxPerSection)continue;
-                if(essential&&displayed>=30)continue;
+                if(essential&&!selectedKeys.contains(j+":"+k))continue;
+                String memo=s(item,"value");
+                if(memo.isEmpty())memo=s(item,"text");
+                if(memo.matches("(?is).*(?:page\\s+PDF\\s*\\d+\\s+(?:est\\s+)?(?:à remplacer|remplacée)|tableau\\s+à\\s+insérer).*"))continue;
                 selected.add(item);displayed++;
             }
             if(!selected.isEmpty())subjectBoard(body,subject,section,selected);
         }
         if(displayed==0)sub(body,"Aucun repère sélectionné. Consulter le mode Complet ou les pages.");
         if(essential)
-            sub(body,"Essentiel : "+displayed+" repères prioritaires sur "+total+" actuellement structurés. Le mode Complet inclut tous les repères disponibles.");
+            sub(body,"Essentiel : "+displayed+" repères sélectionnés dans toutes les parties du cours, parmi "+total+" notions actuellement structurées. Le mode Complet contient également les pages intégrales.");
         else{
-            sub(body,"Complet : "+displayed+" repères structurés, plus les "+sourceCount+" pages du cours source. Les passages non transcrits doivent être étudiés sur les pages.");
+            sub(body,"Toutes les notions structurées : "+displayed+" repères. Le mode Complet affiche aussi les "+sourceCount+" pages de cours, y compris celles dont le texte n'a pas encore été transcrit.");
             if(sourceCount>0){
                 LinearLayout sourceLink=panel(body);
                 heading(sourceLink,"Pages intégrales du cours");
                 sub(sourceLink,"La synthèse textuelle ne remplace pas les figures, tableaux et pages non encore transcrites.");
-                add(sourceLink,button("Lire le cours original, page par page ("+sourceCount+")",true,()->{pageIndex=0;go("PAGES");}));
+                add(sourceLink,button("Cours complet avec les pages ("+sourceCount+")",true,()->{pageIndex=0;guideMode="COMPLETE";go("LESSON");}));
             }
         }
     }
