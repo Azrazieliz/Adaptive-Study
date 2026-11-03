@@ -1,3 +1,5 @@
+> **P0 / READ FIRST:** [00_START_HERE_ADAPTIVE_STUDY.md](00_START_HERE_ADAPTIVE_STUDY.md) — binding rules for every course, Essentiel, Complet, Comprendre, exam QCM/QROC, flashcard, mind map, data migration and APK release.
+
 # Concours — Adaptive Study
 
 Public source for the **Adaptive Study v3.26.1** mobile/PWA engine.
