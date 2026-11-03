@@ -397,11 +397,19 @@ public class MainActivity extends Activity {
     }
     private void showExpertComprehension(JSONObject course){
         LinearLayout introduction=panel(body);
-        heading(introduction,"Comprendre en profondeur — niveau moléculaire");
-        sub(introduction,"Faits examinables de la FC 2026–2027, mécanismes explicatifs et approfondissements scientifiques distingués.");
+        boolean sourceIndexedOnly="SOURCE_INDEXED_FACTS_ONLY__NOT_VERIFIED_EXHAUSTIVE_OR_EXPERT".equals(s(course,"coverageStatus"));
+        boolean publicHealth="sp".equals(s(byChapter.get(currentChapter),"subjectId"))||
+                             "shs".equals(s(byChapter.get(currentChapter),"subjectId"));
+        heading(introduction,sourceIndexedOnly?
+            "Comprendre — tous les faits structurés disponibles":
+            (publicHealth?"Comprendre — raisonnement et déterminants":
+                 "Comprendre en profondeur — structures et mécanismes"));
+        sub(introduction,sourceIndexedOnly?
+             "Reconstitution des données déjà indexées, avec leurs pages sources. La transcription intégrale de toutes les figures, tableaux et interactions de cette FC reste à approfondir ; aucune exhaustivité n’est revendiquée.":
+             "Faits du cours, explications causales et approfondissements distingués ; les valeurs de la FC restent contrôlables sur les pages d’origine.");
         JSONArray sections=arr(course,"sections");
         if(sections==null)return;
-        sub(introduction,sections.length()+" développements • structures, tailles, compartiments, molécules, interactions et conséquences.");
+        sub(introduction,sections.length()+" sections scientifiques • détails, mesures, étapes et interactions selon la matière.");
         add(introduction,button("Voir tous les faits structurés de la FC",false,()->{
             guideMode="FULL_FACTS";go("LESSON");
         }));
@@ -435,11 +443,14 @@ public class MainActivity extends Activity {
             JSONArray keywords=arr(block,"keywords");
             TextView tag=technicalText(s(block,"source"),15,WHITE,keywords);
             tag.setPadding(dp(5),dp(6),dp(5),dp(10));
-            add(card,text("FAITS ET DÉTAILS DE LA FC",12,GREEN,true));
+            add(card,text(sourceIndexedOnly?"FAITS TEXTUELS INDEXÉS — SOURCE À VÉRIFIER":
+                                  "FAITS ET DÉTAILS DE LA FC",12,GREEN,true));
             add(card,tag);
             String mechanisms=s(block,"mechanism");
             if(!mechanisms.isEmpty()){
-                add(card,text("EXPLICATION MÉCANISTIQUE • LIENS ET DÉDUCTIONS",12,BLUE,true));
+                add(card,text(sourceIndexedOnly?
+                    "LIENS ET EXPLICATIONS DÉJÀ DOCUMENTÉS":
+                    "EXPLICATION MÉCANISTIQUE • LIENS ET DÉDUCTIONS",12,BLUE,true));
                 TextView explained=technicalText(mechanisms,16,WHITE,keywords);
                 explained.setPadding(dp(5),dp(7),dp(5),dp(12));add(card,explained);
             }
@@ -457,9 +468,14 @@ public class MainActivity extends Activity {
             }
         }
         LinearLayout end=panel(body);
-        sub(end,"Les pages et schémas d'origine restent accessibles : les paragraphes n'effacent ni les données quantitatives, ni les structures, ni les partenaires moléculaires.");
-        buttons(end,"Cours complet et tableaux",()->{pageIndex=0;guideMode="COMPLETE";go("LESSON");},
-                "Questions du cours",()->startQuiz(currentChapter));
+        sub(end,"Les pages et schémas d’origine restent accessibles : ils constituent la référence quand une notion du document n’a pas encore été transcrite.");
+        boolean hasQuestions=questionsByChapter.containsKey(currentChapter)&&
+            !questionsByChapter.get(currentChapter).isEmpty();
+        buttons(end,"Cours complet et tableaux",()->{
+                    pageIndex=0;completeSourceMode=false;guideMode="COMPLETE";go("LESSON");
+                },
+                hasQuestions?"Questions du cours":"Pages originales",
+                ()->{if(hasQuestions)startQuiz(currentChapter);else {pageIndex=0;go("PAGES");}});
     }
     private void showAllUnderlyingFacts(LinearLayout container,JSONObject section,boolean shs){
         JSONArray evidence=arr(section,"evidence");
@@ -761,6 +777,21 @@ public class MainActivity extends Activity {
                     "QCM A–E",()->startQuiz(urgentId));
             buttons(focus,"Flashcards",()->startCards(urgentId),
                     "Essentiel / Complet",()->{openLesson(urgentId);guideMode="ESSENTIAL";go("LESSON");});
+        }
+        JSONObject newCourse=byChapter.get("sp_demandes_offres");
+        if(newCourse!=null){
+            heading(body,"NOUVELLE FC — SANTÉ PUBLIQUE");
+            LinearLayout newPanel=panel(body);
+            heading(newPanel,s(newCourse,"title"));
+            sub(newPanel,"23 pages de FC • 258 faits structurés • 22 sections explicatives. Aucun QCM, aucune annale inventés.");
+            buttons(newPanel,"Comprendre",()->openLesson("sp_demandes_offres"),
+                    "Complet",()->{
+                        openLesson("sp_demandes_offres");
+                        guideMode="COMPLETE";completeSourceMode=false;go("LESSON");
+                    });
+            add(newPanel,button("Lire la FC originale",false,()->{
+                openLesson("sp_demandes_offres");pageIndex=0;go("PAGES");
+            }));
         }
         heading(body,"Révisions — cours existants");
         ArrayList<JSONObject> rank=new ArrayList<>(chapters);
