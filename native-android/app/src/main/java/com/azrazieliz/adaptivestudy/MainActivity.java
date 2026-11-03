@@ -149,6 +149,7 @@ public class MainActivity extends Activity {
                 loadComprehensionGuides();
                 loadOriginalQuestions();
                 loadFullLessonIndexes();
+                loadExpertComprehension();
                 runOnUiThread(this::render);
             }catch(Exception e){
                 runOnUiThread(()->{root.removeAllViews();TextView err=text("Impossible de charger les cours hors ligne : "+e,16,RED,false);root.addView(err);});
@@ -490,6 +491,132 @@ public class MainActivity extends Activity {
             comprehensionGuides=new JSONObject(new String(out.toByteArray(),"UTF-8")).optJSONObject("chapters");
         }
     }
+    private JSONObject expertComprehension;
+    private void loadExpertComprehension() throws Exception{
+        JSONObject root=readJsonAsset("expert_comprehension_v3311.json");
+        expertComprehension=obj(root,"courses");
+    }
+    private TextView technicalText(String value,int fontSize,int textColor,JSONArray keywords){
+        TextView label=text(value,fontSize,textColor,false);
+        label.setTextIsSelectable(true);
+        label.setLineSpacing(dp(4),1.06f);
+        if(keywords==null||keywords.length()==0)return label;
+        android.text.SpannableString span=new android.text.SpannableString(value);
+        String lower=value.toLowerCase(Locale.ROOT);
+        for(int k=0;k<keywords.length();k++){
+            String term=keywords.optString(k,"");
+            if(term.isEmpty()||term.length()<3)continue;
+            String fragment=term.toLowerCase(Locale.ROOT);
+            int pos=0;
+            while(pos<lower.length()){
+                int at=lower.indexOf(fragment,pos);
+                if(at<0)break;
+                int end=Math.min(at+term.length(),value.length());
+                span.setSpan(new android.text.style.StyleSpan(android.graphics.Typeface.BOLD),
+                        at,end,android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                span.setSpan(new android.text.style.ForegroundColorSpan(BLUE),
+                        at,end,android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                pos=end;
+            }
+        }
+        label.setText(span);
+        return label;
+    }
+    private void showExpertComprehension(JSONObject course){
+        LinearLayout introduction=panel(body);
+        heading(introduction,"Comprendre en profondeur — niveau moléculaire");
+        sub(introduction,"Faits examinables de la FC 2026–2027, mécanismes explicatifs et approfondissements scientifiques distingués.");
+        JSONArray sections=arr(course,"sections");
+        if(sections==null)return;
+        sub(introduction,sections.length()+" développements • structures, tailles, compartiments, molécules, interactions et conséquences.");
+        add(introduction,button("Voir tous les faits structurés de la FC",false,()->{
+            guideMode="FULL_FACTS";go("LESSON");
+        }));
+        final ArrayList<View> positions=new ArrayList<>();
+        ArrayList<String> labels=new ArrayList<>();labels.add("Aller directement à une partie…");
+        for(int k=0;k<sections.length();k++){
+            JSONObject block=sections.optJSONObject(k);
+            labels.add(s(block,"title"));
+        }
+        Spinner navigation=new Spinner(this);
+        ArrayAdapter<String> adapter=new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,labels);
+        navigation.setAdapter(adapter);add(body,navigation);
+        navigation.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){
+            @Override public void onNothingSelected(android.widget.AdapterView<?> p){}
+            @Override public void onItemSelected(android.widget.AdapterView<?> p,View v,int pos,long id){
+                if(pos<1||pos>positions.size())return;
+                View target=positions.get(pos-1);
+                scroll.post(()->scroll.smoothScrollTo(0,Math.max(0,target.getTop())));
+            }
+        });
+        for(int i=0;i<sections.length();i++){
+            JSONObject block=sections.optJSONObject(i);
+            if(block==null)continue;
+            LinearLayout card=panel(body);
+            positions.add(card);
+            heading(card,s(block,"title"));
+            JSONArray sourcePages=arr(block,"sourcePages");
+            ArrayList<String> named=new ArrayList<>();
+            if(sourcePages!=null)for(int j=0;j<sourcePages.length();j++)named.add(String.valueOf(sourcePages.optInt(j)));
+            sub(card,"FC d'origine • page(s) "+android.text.TextUtils.join(", ",named));
+            JSONArray keywords=arr(block,"keywords");
+            TextView tag=technicalText(s(block,"source"),15,WHITE,keywords);
+            tag.setPadding(dp(5),dp(6),dp(5),dp(10));
+            add(card,text("FAITS ET DÉTAILS DE LA FC",12,GREEN,true));
+            add(card,tag);
+            String mechanisms=s(block,"mechanism");
+            if(!mechanisms.isEmpty()){
+                add(card,text("EXPLICATION MÉCANISTIQUE • LIENS ET DÉDUCTIONS",12,BLUE,true));
+                TextView explained=technicalText(mechanisms,16,WHITE,keywords);
+                explained.setPadding(dp(5),dp(7),dp(5),dp(12));add(card,explained);
+            }
+            String advanced=s(block,"advanced");
+            if(!advanced.isEmpty()){
+                add(card,text("APPROFONDISSEMENT • DISTINCT DU TEXTE EXIGIBLE DE LA FC",12,MUTED,true));
+                TextView expanded=technicalText(advanced,14,MUTED,keywords);
+                expanded.setPadding(dp(5),dp(5),dp(5),dp(10));add(card,expanded);
+            }
+            if(sourcePages!=null&&sourcePages.length()>0){
+                int first=sourcePages.optInt(0,1);
+                add(card,button("Contrôler la page originale "+first,false,()->{
+                    pageIndex=Math.max(0,first-1);go("PAGES");
+                }));
+            }
+        }
+        LinearLayout end=panel(body);
+        sub(end,"Les pages et schémas d'origine restent accessibles : les paragraphes n'effacent ni les données quantitatives, ni les structures, ni les partenaires moléculaires.");
+        buttons(end,"Cours complet et tableaux",()->{pageIndex=0;guideMode="COMPLETE";go("LESSON");},
+                "Questions du cours",()->startQuiz(currentChapter));
+    }
+    private void showAllUnderlyingFacts(LinearLayout container,JSONObject section,boolean shs){
+        JSONArray evidence=arr(section,"evidence");
+        if(evidence==null||evidence.length()==0)return;
+        TextView label=text(shs?"INTITULÉS, MOTS-CLÉS ET DÉTAILS DES TABLEAUX":"DONNÉES STRUCTURALES, MOLÉCULAIRES ET QUANTITATIVES",12,BLUE,true);
+        label.setPadding(dp(3),dp(8),dp(3),dp(8));add(container,label);
+        for(int j=0;j<evidence.length();j++){
+            JSONObject row=evidence.optJSONObject(j);
+            if(row==null)continue;
+            String raw=s(row,"value");
+            if(raw.isEmpty())continue;
+            String title=s(row,"label");
+            if(title.isEmpty())title="Notion "+(j+1);
+            if(raw.toLowerCase(Locale.ROOT).contains("page pdf")&&raw.toLowerCase(Locale.ROOT).contains("remplac"))continue;
+            int page=row.optInt("sourcePage",0);
+            String provenance=page>0?" • FC p. "+page:"";
+            // SHS labels are bold and emphasized; source PDF typography is preserved in the image.
+            LinearLayout statement=vertical();
+            statement.setPadding(dp(11),dp(8),dp(11),dp(10));
+            statement.setBackground(bg(PANEL2,0,10));
+            TextView name=text(title+provenance,shs?14:13,BLUE,true);
+            add(statement,name);
+            TextView detail=text(raw,15,WHITE,false);
+            detail.setTextIsSelectable(true);
+            detail.setLineSpacing(dp(3),1.05f);
+            add(statement,detail);
+            add(container,statement);
+        }
+    }
+
     private void showComprehension(){
         JSONObject entry=comprehensionGuides==null?null:comprehensionGuides.optJSONObject(currentChapter);
         if(entry==null){
@@ -497,6 +624,11 @@ public class MainActivity extends Activity {
             heading(empty,"Texte explicatif indisponible");
             sub(empty,"Aucun texte vérifié pour ce chapitre.");
             add(empty,button("Consulter les sources",true,()->{pageIndex=0;go("PAGES");}));
+            return;
+        }
+        JSONObject expert=expertComprehension==null?null:expertComprehension.optJSONObject(currentChapter);
+        if(expert!=null){
+            showExpertComprehension(expert);
             return;
         }
         String status=s(entry,"coverageStatus");
@@ -584,6 +716,7 @@ public class MainActivity extends Activity {
                 t.setPadding(dp(4),dp(3),dp(4),dp(11));
                 add(container,t);
             }
+            showAllUnderlyingFacts(container,section,"shs".equals(s(byChapter.get(currentChapter),"subjectId")));
             JSONArray pg=arr(section,"sourcePages");
             if(!linked&&pg!=null&&pg.length()>0){
                 int first=pg.optInt(0,0);
@@ -597,7 +730,7 @@ public class MainActivity extends Activity {
             }
         }
         LinearLayout close=panel(body);
-        sub(close,"Ce texte n'ajoute pas de chiffres, de processus ou de détails médicaux extérieurs aux supports actuellement intégrés. Les figures et tableaux originaux restent indispensables.");
+        sub(close,"Les paragraphes sont complétés par les données détaillées structurées de la FC. Les termes en gras des sources SHS sont préservés dans les pages originales, et les intitulés sont mis en valeur ici.");
         buttons(close,"Complet (sources et textes)",()->{pageIndex=0;guideMode="COMPLETE";go("LESSON");},
                 "Toutes les notions",()->{guideMode="FULL_FACTS";go("LESSON");});
     }
@@ -888,6 +1021,24 @@ public class MainActivity extends Activity {
         if(attempted>0)sub(overview,attempted+" anciens exercices dérivés traités (ne comptent pas comme annales authentifiées).");
         info(overview,"Flashcards révisées",reviewed+" / "+cards.size());
         buttons(overview,"Questions concours",()->go("QUESTION_HOME"),"Réviser les cartes",()->go("CARD_PICK"));
+        heading(body,"EXAMEN DU 4 NOVEMBRE — TROIS PRIORITÉS");
+        sub(body,"Première semaine • Deuxième semaine (Partie 1) • Fécondation. Accès direct à chaque cours, aux flashcards, aux QCM A–E et aux originaux corrigés.");
+        String[] urgentIds={"histo_semaine1","histo_semaine2","histo_fecondation"};
+        for(String urgentId:urgentIds){
+            JSONObject chapter=byChapter.get(urgentId);
+            if(chapter==null)continue;
+            LinearLayout focus=panel(body);
+            heading(focus,s(chapter,"title"));
+            JSONArray sourcePages=mediaPages==null?null:mediaPages.optJSONArray(urgentId);
+            int pageCount=sourcePages==null?0:sourcePages.length();
+            int cardCount=cardsByChapter.containsKey(urgentId)?cardsByChapter.get(urgentId).size():0;
+            int qCount=questionsByChapter.containsKey(urgentId)?questionsByChapter.get(urgentId).size():0;
+            sub(focus,pageCount+" pages FC • "+cardCount+" flashcards • "+qCount+" QCM/QROC d'entraînement");
+            buttons(focus,"Comprendre / Cours",()->openLesson(urgentId),
+                    "QCM A–E",()->startQuiz(urgentId));
+            buttons(focus,"Flashcards",()->startCards(urgentId),
+                    "Annales et corrigés",()->openExamLibrary(urgentId));
+        }
         heading(body,"Révisions — cours existants");
         ArrayList<JSONObject> rank=new ArrayList<>(chapters);
         rank.sort((a,b)->Integer.compare(priorityScore(b),priorityScore(a)));
