@@ -771,21 +771,22 @@ public class MainActivity extends Activity {
             LinearLayout item=panel(body);
             item.addView(text(subjectName(s(c,"subjectId"))+" • "+s(c,"title"),15,WHITE,true));
             int fc=cardsByChapter.containsKey(id)?cardsByChapter.get(id).size():0;
-            JSONArray examPapers=docs==null?null:docs.optJSONArray(id);
-            int paperCount=examPapers==null?0:examPapers.length();
-            sub(item,fc+" cartes de révision • "+paperCount+" PDF annales/QE fournis");
-            buttons(item,"Annales / QE",()->startQuiz(id),"Cours",()->openLesson(id));
+            int practice=questionsByChapter.containsKey(id)?questionsByChapter.get(id).size():0;
+            sub(item,fc+" flashcards • "+practice+" questions d’entraînement");
+            buttons(item,"Questions",()->startQuiz(id),"Cours",()->openLesson(id));
             if(++shown>=5)break;
         }
         heading(body,"Matières");
         for(Map.Entry<String,String> sb:subjects.entrySet()){
-            String sid=sb.getKey();int courseCount=0,paperCount=0;
+            String sid=sb.getKey();int courseCount=0,practiceCount=0;
             for(JSONObject c:chapters)if(s(c,"subjectId").equals(sid)){
                 courseCount++;
-                JSONArray a=docs==null?null:docs.optJSONArray(s(c,"id"));
-                if(a!=null)paperCount+=a.length();
+                ArrayList<Integer> entries=questionsByChapter.get(s(c,"id"));
+                if(entries!=null)practiceCount+=entries.size();
             }
-            LinearLayout p=panel(body);p.addView(text(sb.getValue(),16,WHITE,true));sub(p,courseCount+" cours • "+paperCount+" PDF annales/QE");
+            LinearLayout p=panel(body);
+            p.addView(text(sb.getValue(),16,WHITE,true));
+            sub(p,courseCount+" cours • "+practiceCount+" questions d’entraînement");
             p.setOnClickListener(v->{activeSubject=sid;go("CATALOG");});
         }
     }
