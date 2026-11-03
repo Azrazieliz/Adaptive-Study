@@ -147,6 +147,7 @@ public class MainActivity extends Activity {
                 try(InputStream ins=getAssets().open("board_catalog.json");ByteArrayOutputStream out=new ByteArrayOutputStream()){byte[] tmp=new byte[16384];int n;while((n=ins.read(tmp))!=-1)out.write(tmp,0,n);boardCatalog=new JSONObject(new String(out.toByteArray(),"UTF-8"));}
                 loadOriginalExamCatalog();
                 loadComprehensionGuides();
+                loadOriginalQuestions();
                 runOnUiThread(this::render);
             }catch(Exception e){
                 runOnUiThread(()->{root.removeAllViews();TextView err=text("Impossible de charger les cours hors ligne : "+e,16,RED,false);root.addView(err);});
@@ -491,6 +492,158 @@ public class MainActivity extends Activity {
                 "Pages sources",()->{pageIndex=0;go("PAGES");});
     }
 
+    private final ArrayList<JSONObject> originalQuestionItems=new ArrayList<>(),originalSession=new ArrayList<>();
+    private final HashMap<String,ArrayList<JSONObject>> originalQuestionsByChapter=new HashMap<>();
+    private int originalQuestionIndex=0;
+    private String originalSelected="";
+    private boolean originalAnswerVisible=false;
+    private long originalItemStart=0;
+    private String originalQuestionCourse="";
+    private void loadOriginalQuestions() throws Exception{
+        try(InputStream input=getAssets().open("original_question_catalog.json");
+            ByteArrayOutputStream output=new ByteArrayOutputStream()){
+            byte[] b=new byte[8192];int n;
+            while((n=input.read(b))!=-1)output.write(b,0,n);
+            JSONObject catalog=new JSONObject(new String(output.toByteArray(),"UTF-8"));
+            JSONArray list=arr(catalog,"items");
+            if(list==null)return;
+            for(int i=0;i<list.length();i++){
+                JSONObject x=list.optJSONObject(i);
+                if(x==null||!byChapter.containsKey(s(x,"chapterId")))continue;
+                originalQuestionItems.add(x);
+                originalQuestionsByChapter.computeIfAbsent(s(x,"chapterId"),k->new ArrayList<>()).add(x);
+            }
+        }
+    }
+    private void showQuestionModes(){
+        heading(body,"Questions — format concours");
+        sub(body,"Entraînement A–E / QROC et questions originales présentées séparément, avec les corrigés disponibles.");
+        LinearLayout originals=panel(body);
+        heading(originals,"Questions originales — annales et QE");
+        sub(originals,originalQuestionItems.size()+" questions des documents fournis, avec pages originales et pages de correction. La réponse n'est pas automatiquement lue dans les scans.");
+        add(originals,button("Résoudre les vraies questions",true,()->go("ORIGINAL_Q_PICK")));
+        LinearLayout fresh=panel(body);
+        heading(fresh,"Questions nouvelles — entraînement");
+        sub(fresh,questions.size()+" questions sélectionnées à partir des cours, format A–E ou QROC. Elles ne sont pas des annales recopiées.");
+        add(fresh,button("Questions nouvelles A–E / QROC",true,()->go("QUIZ_PICK")));
+        LinearLayout paper=panel(body);
+        heading(paper,"Sujets et corrections complets");
+        sub(paper,"Retrouver les PDF originaux, sans modification.");
+        add(paper,button("Bibliothèque des annales et QE",false,()->openExamLibrary("")));
+    }
+    private void showOriginalQuestionPick(){
+        heading(body,"Questions d'annales et QE — originales");
+        sub(body,"L'énoncé reste dans l'image du document fourni. Après votre choix A–E, ouvrez son corrigé et auto-évaluez votre réponse.");
+        subjectFilters(body,()->go("ORIGINAL_Q_PICK"));
+        int total=0;
+        for(JSONObject c:chapters){
+            String id=s(c,"id");
+            if(!"ALL".equals(activeSubject)&&!activeSubject.equals(s(c,"subjectId")))continue;
+            ArrayList<JSONObject> items=originalQuestionsByChapter.get(id);
+            if(items==null||items.isEmpty())continue;
+            total+=items.size();
+            LinearLayout p=panel(body);
+            heading(p,s(c,"title"));
+            int qe=0,annale=0;
+            for(JSONObject q:items){
+                if("QE".equals(s(q,"sourceType")))qe++;
+                if("ANNAL".equals(s(q,"sourceType")))annale++;
+            }
+            sub(p,items.size()+" questions • "+qe+" QE • "+annale+" annales");
+            add(p,button("Commencer les questions de ce cours",true,()->startOriginalQuestions(id)));
+        }
+        if(total==0)sub(body,"Aucune question originale pour ce filtre.");
+    }
+    private void startOriginalQuestions(String id){
+        ArrayList<JSONObject> items=originalQuestionsByChapter.get(id);
+        if(items==null||items.isEmpty()){go("ORIGINAL_Q_PICK");return;}
+        originalQuestionCourse=id;
+        originalSession.clear();
+        int offset=prefs.getInt("original/questions-offset/"+id,0)%items.size();
+        for(int i=0;i<Math.min(25,items.size());i++)originalSession.add(items.get((offset+i)%items.size()));
+        prefs.edit().putInt("original/questions-offset/"+id,offset+originalSession.size()).apply();
+        originalQuestionIndex=0;originalAnswerVisible=false;originalSelected="";originalItemStart=SystemClock.elapsedRealtime();
+        go("ORIGINAL_Q");
+    }
+    private void finishOriginalQuestion(double score){
+        if(originalQuestionIndex>=originalSession.size()){go("ORIGINAL_Q_PICK");return;}
+        JSONObject doc=originalSession.get(originalQuestionIndex);
+        long elapsed=Math.max(0,SystemClock.elapsedRealtime()-originalItemStart);
+        JSONObject scored=new JSONObject();
+        try{
+            scored.put("id","original-question:"+s(doc,"id"));
+            scored.put("subjectId",s(byChapter.get(originalQuestionCourse),"subjectId"));
+            scored.put("format","shs".equals(s(byChapter.get(originalQuestionCourse),"subjectId"))?"QROC":"QCM");
+        }catch(Exception ignored){}
+        recordAnswer(scored,score,elapsed);
+        originalQuestionIndex++;
+        originalAnswerVisible=false;originalSelected="";originalItemStart=SystemClock.elapsedRealtime();
+        go("ORIGINAL_Q");
+    }
+    private void showOriginalQuestion(){
+        if(originalQuestionIndex>=originalSession.size()){
+            heading(body,"Session de questions originales terminée");
+            add(body,button("Nouvelle série",true,()->startOriginalQuestions(originalQuestionCourse)));
+            add(body,button("Autre cours",false,()->go("ORIGINAL_Q_PICK")));
+            return;
+        }
+        JSONObject doc=originalSession.get(originalQuestionIndex);
+        boolean shs="shs".equals(s(byChapter.get(originalQuestionCourse),"subjectId"));
+        heading(body,chapterTitle(originalQuestionCourse));
+        sub(body,(originalQuestionIndex+1)+" / "+originalSession.size()+
+            " • "+("ANNAL".equals(s(doc,"sourceType"))?"Annale":s(doc,"sourceType"))+
+            " • question n° "+doc.optInt("number")+" • coefficient "+coefficient(s(byChapter.get(originalQuestionCourse),"subjectId")));
+        sub(body,"Énoncé original reproduit en image — aucune proposition reconstruite.");
+        JSONArray imgs=arr(doc,"questionImages");
+        if(imgs!=null)for(int i=0;i<imgs.length();i++)drawImage(imgs.optString(i));
+        if(!originalAnswerVisible){
+            LinearLayout response=panel(body);
+            heading(response,shs?"Restitution QROC":"Votre sélection A–E");
+            final ArrayList<CheckBox> answers=new ArrayList<>();
+            if(shs){
+                EditText draft=new EditText(this);
+                draft.setHint("Rédiger la réponse complète avant la correction");draft.setTextColor(WHITE);
+                draft.setMinLines(4);draft.setGravity(Gravity.TOP);add(response,draft);
+            }else{
+                for(char c='A';c<='E';c++){
+                    CheckBox check=new CheckBox(this);check.setText(String.valueOf(c));
+                    check.setTextColor(WHITE);check.setTextSize(16);
+                    add(response,check);answers.add(check);
+                }
+            }
+            add(response,button("Afficher le corrigé original",true,()->{
+                StringBuilder selected=new StringBuilder();
+                for(CheckBox box:answers)if(box.isChecked()){
+                    if(selected.length()>0)selected.append(", ");
+                    selected.append(box.getText());
+                }
+                originalSelected=selected.length()>0?selected.toString():"Aucune proposition cochée";
+                originalAnswerVisible=true;go("ORIGINAL_Q");
+            }));
+        }else{
+            LinearLayout correction=panel(body);
+            heading(correction,"Corrigé fourni");
+            if(!shs)sub(correction,"Votre sélection : "+originalSelected);
+            String status=s(doc,"pagePairing");
+            if("PROPORTIONAL_PAGE_FALLBACK".equals(status))
+                sub(correction,"Correspondance de pages non confirmée : vérifier le numéro dans le corrigé complet.");
+            else sub(correction,"Vérifiez chaque réponse dans le corrigé fourni avant de noter.");
+            JSONArray corrected=arr(doc,"correctionImages");
+            if(corrected!=null)for(int i=0;i<corrected.length();i++)drawImageInto(correction,corrected.optString(i));
+            if(shs){
+                buttons(correction,"Réponse incomplète • 0",()->finishOriginalQuestion(0),
+                    "Intégralement exacte • 1",()->finishOriginalQuestion(1));
+            }else{
+                buttons(correction,"0 erreur • 1",()->finishOriginalQuestion(1),
+                    "1 erreur • 0,7",()->finishOriginalQuestion(.7));
+                buttons(correction,"2 erreurs • 0,1",()->finishOriginalQuestion(.1),
+                    "≥3 erreurs • 0",()->finishOriginalQuestion(0));
+            }
+        }
+        add(body,button("Consulter le PDF complet",false,()->openExamLibrary(originalQuestionCourse)));
+        add(body,button("Changer de cours",false,()->go("ORIGINAL_Q_PICK")));
+    }
+
     private void indexData(){
         guides=obj(corpus,"courseGuides");mediaPages=obj(corpus,"coursePages");
         mindmaps=obj(corpus,"mindMaps");courseAssets=obj(corpus,"courseAssets");courseMeta=obj(corpus,"courseMeta");
@@ -569,23 +722,28 @@ public class MainActivity extends Activity {
             case "BOARDS":showBoards();break;
             case "PAGES":showPages(false);break;
             case "MAP":showConceptMap();break;
+            case "MAP_BOARD":showStructuredMap();break;
+            case "MAP_IMAGE_DETAIL":showOriginalMapDetail();break;
             case "MAP_DETAIL":showConceptBranch();break;
+            case "QUESTION_HOME":showQuestionModes();break;
+            case "ORIGINAL_Q_PICK":showOriginalQuestionPick();break;
+            case "ORIGINAL_Q":showOriginalQuestion();break;
             case "EXAM_LIBRARY":showExamLibrary();break;
             case "EXAM_PDF":showOriginalPaper();break;
-            case "QUIZ_PICK":showExamLibrary();break;
+            case "QUIZ_PICK":showPick(true);break;
             case "CARD_PICK":showPick(false);break;
             case "QUIZ":showQuiz();break;
             case "CARDS":showCard();break;
             default:showHome();
         }
         nav=horizontal();nav.setBackground(bg(PANEL,0,0));nav.setPadding(dp(6),dp(7),dp(6),dp(7));
-        addNav("Accueil","HOME");addNav("Questions","EXAM_LIBRARY");addNav("Flashcards","CARD_PICK");addNav("Cours","CATALOG");
+        addNav("Accueil","HOME");addNav("Questions","QUESTION_HOME");addNav("Flashcards","CARD_PICK");addNav("Cours","CATALOG");
         root.addView(nav,new LinearLayout.LayoutParams(-1,-2));
     }
     private void addNav(String name,String dest){
-        boolean active=screen.equals(dest)||((screen.equals("LESSON")||screen.equals("PAGES")||screen.equals("MAP")||screen.equals("MAP_DETAIL")||screen.equals("BOARDS"))&&dest.equals("CATALOG"))
-                ||(screen.equals("QUIZ")&&dest.equals("EXAM_LIBRARY"))||
-            (screen.equals("EXAM_PDF")&&dest.equals("EXAM_LIBRARY"))||(screen.equals("CARDS")&&dest.equals("CARD_PICK"));
+        boolean active=screen.equals(dest)||((screen.equals("LESSON")||screen.equals("PAGES")||screen.equals("MAP")||screen.equals("MAP_BOARD")||screen.equals("MAP_IMAGE_DETAIL")||screen.equals("MAP_DETAIL")||screen.equals("BOARDS"))&&dest.equals("CATALOG"))
+                ||((screen.equals("QUIZ")||screen.equals("QUIZ_PICK")||screen.equals("ORIGINAL_Q")||
+              screen.equals("ORIGINAL_Q_PICK")||screen.equals("EXAM_PDF")||screen.equals("EXAM_LIBRARY"))&&dest.equals("QUESTION_HOME"))||(screen.equals("CARDS")&&dest.equals("CARD_PICK"));
         TextView t=text(name,11,active?BLUE:MUTED,active);t.setGravity(Gravity.CENTER);
         t.setMinHeight(dp(46));t.setBackground(bg(active?PANEL2:PANEL,0,9));t.setOnClickListener(v->go(dest));
         nav.addView(t,new LinearLayout.LayoutParams(0,dp(47),1));
@@ -619,7 +777,7 @@ public class MainActivity extends Activity {
         info(overview,"Annales et QE fournis",examCount+" PDF de sujets/corrigés — documents originaux");
         if(attempted>0)sub(overview,attempted+" anciens exercices dérivés traités (ne comptent pas comme annales authentifiées).");
         info(overview,"Flashcards révisées",reviewed+" / "+cards.size());
-        buttons(overview,"Annales et QE originaux",()->openExamLibrary(""),"Réviser les cartes",()->go("CARD_PICK"));
+        buttons(overview,"Questions concours",()->go("QUESTION_HOME"),"Réviser les cartes",()->go("CARD_PICK"));
         heading(body,"Révisions — cours existants");
         ArrayList<JSONObject> rank=new ArrayList<>(chapters);
         rank.sort((a,b)->Integer.compare(priorityScore(b),priorityScore(a)));
@@ -948,7 +1106,7 @@ public class MainActivity extends Activity {
         }
         int displayed=0,total=0;
         boolean essential="ESSENTIAL".equals(guideMode);
-        int maxPerSection=Math.max(2,56/Math.max(1,sections.length()));
+        int maxPerSection=Math.max(1,Math.min(3,30/Math.max(1,sections.length())));
         for(int j=0;j<sections.length();j++){
             JSONObject section=sections.optJSONObject(j);if(section==null)continue;
             JSONArray items=arr(section,"items");if(items==null)continue;
@@ -960,15 +1118,23 @@ public class MainActivity extends Activity {
                 total++;
                 if(essential&&item.optInt("priority",1)<2)continue;
                 if(essential&&selected.size()>=maxPerSection)continue;
+                if(essential&&displayed>=30)continue;
                 selected.add(item);displayed++;
             }
             if(!selected.isEmpty())subjectBoard(body,subject,section,selected);
         }
         if(displayed==0)sub(body,"Aucun repère sélectionné. Consulter le mode Complet ou les pages.");
         if(essential)
-            sub(body,"Essentiel : "+displayed+" repères sélectionnés. Le mode Complet contient les "+total+" repères structurés actuellement disponibles.");
-        else
-            sub(body,""+displayed+" repères structurés disponibles. La fidélité et l'exhaustivité doivent être vérifiées contre le cours original.");
+            sub(body,"Essentiel : "+displayed+" repères prioritaires sur "+total+" actuellement structurés. Le mode Complet inclut tous les repères disponibles.");
+        else{
+            sub(body,"Complet : "+displayed+" repères structurés, plus les "+sourceCount+" pages du cours source. Les passages non transcrits doivent être étudiés sur les pages.");
+            if(sourceCount>0){
+                LinearLayout sourceLink=panel(body);
+                heading(sourceLink,"Pages intégrales du cours");
+                sub(sourceLink,"La synthèse textuelle ne remplace pas les figures, tableaux et pages non encore transcrites.");
+                add(sourceLink,button("Lire le cours original, page par page ("+sourceCount+")",true,()->{pageIndex=0;go("PAGES");}));
+            }
+        }
     }
 
     private boolean isMemorySubject(String id){
@@ -1201,7 +1367,48 @@ public class MainActivity extends Activity {
         }
     }
 
+    private int mindMapDetailIndex=0;
     private void showConceptMap(){
+        JSONObject mind=mindmaps==null?null:mindmaps.optJSONObject(currentChapter);
+        if(mind==null||s(mind,"path").isEmpty()){
+            showStructuredMap();
+            return;
+        }
+        heading(body,"Carte mentale originale — "+chapterTitle(currentChapter));
+        sub(body,"Cartes originales restaurées depuis le projet antérieur, sans remplacement graphique.");
+        add(body,button("Voir les tableaux et relations lisibles",false,()->go("MAP_BOARD")));
+        drawImage(s(mind,"path"));
+        JSONArray branches=arr(mind,"subMaps");
+        if(branches!=null&&branches.length()>0){
+            heading(body,"Cartes détaillées");
+            for(int i=0;i<branches.length();i++){
+                JSONObject branch=branches.optJSONObject(i);if(branch==null)continue;
+                int ix=i;
+                add(body,button((i+1)+". "+s(branch,"title"),false,()->{
+                    mindMapDetailIndex=ix;go("MAP_IMAGE_DETAIL");
+                }));
+            }
+        }
+        add(body,button("Revenir au cours",true,()->go("LESSON")));
+    }
+    private void showOriginalMapDetail(){
+        JSONObject mind=mindmaps==null?null:mindmaps.optJSONObject(currentChapter);
+        JSONArray branches=arr(mind,"subMaps");
+        if(branches==null||branches.length()==0){go("MAP");return;}
+        mindMapDetailIndex=Math.max(0,Math.min(branches.length()-1,mindMapDetailIndex));
+        JSONObject page=branches.optJSONObject(mindMapDetailIndex);
+        heading(body,s(page,"title"));
+        sub(body,"Carte "+(mindMapDetailIndex+1)+" / "+branches.length()+" — image originale");
+        buttons(body,"◀ Précédente",()->{
+            mindMapDetailIndex=Math.max(0,mindMapDetailIndex-1);go("MAP_IMAGE_DETAIL");
+        },"Suivante ▶",()->{
+            mindMapDetailIndex=Math.min(branches.length()-1,mindMapDetailIndex+1);go("MAP_IMAGE_DETAIL");
+        });
+        drawImage(s(page,"path"));
+        buttons(body,"Toutes les cartes",()->go("MAP"),"Liste textuelle",()->go("MAP_BOARD"));
+    }
+
+    private void showStructuredMap(){
         String courseName=chapterTitle(currentChapter);
         JSONObject chapter=byChapter.get(currentChapter);
         String subject=s(chapter,"subjectId");
@@ -1305,10 +1512,11 @@ public class MainActivity extends Activity {
                 "Page suivante ▶",()->{if(pageIndex<n-1){pageIndex++;go(map?"MAP":"PAGES");}});
         sub(target,(pageIndex+1)+" / "+n);
     }
-    private void drawImage(String path){
+    private void drawImage(String path){drawImageInto(body,path);}
+    private void drawImageInto(LinearLayout target,String path){
         final ZoomImageView image=new ZoomImageView(this);
         image.setBackground(bg(PANEL,Color.rgb(45,67,94),12));
-        LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,dp(560));body.addView(image,lp);
+        LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,dp(560));target.addView(image,lp);
         image.setTag(path);
         new Thread(()->{
             try(InputStream in=media(path)){
@@ -1319,7 +1527,7 @@ public class MainActivity extends Activity {
                 Bitmap b=BitmapFactory.decodeStream(in,null,opts);
                 if(b==null)throw new IOException("Image absente");
                 runOnUiThread(()->{if(path.equals(image.getTag()))image.load(b);else b.recycle();});
-            }catch(Exception e){runOnUiThread(()->sub(body,"Image indisponible : "+path));}
+            }catch(Exception e){runOnUiThread(()->sub(target,"Image indisponible : "+path));}
         },"NativeImage").start();
     }
     private void drawPdf(String path){
@@ -1372,7 +1580,11 @@ public class MainActivity extends Activity {
             pp.setOnClickListener(v->{if(quiz)startQuiz(id);else startCards(id);});
         }
     }
-    private void startQuiz(String id){openExamLibrary(id);}
+    private void startQuiz(String id){
+        ArrayList<Integer> list=questionsByChapter.get(id);
+        if(list!=null&&!list.isEmpty())launchQuiz(list);
+        else openExamLibrary(id);
+    }
     private void launchQuiz(List<Integer> ids){
         sessionQuestions.clear();sessionQuestions.addAll(ids);
         if(sessionQuestions.size()>20){
@@ -1416,10 +1628,22 @@ public class MainActivity extends Activity {
                 if(feedback.getChildCount()>0)return;
                 if(questionStarted>0){questionActiveMs+=SystemClock.elapsedRealtime()-questionStarted;questionStarted=0;}
                 questionFinalized=true;
-                JSONArray pts=arr(q,"expectedPoints");heading(feedback,"Correction : éléments attendus");
-                if(pts!=null)for(int i=0;i<pts.length();i++)info(feedback,"Point "+(i+1),pts.optString(i));
+                JSONArray pts=arr(q,"expectedPoints");heading(feedback,"Correction : grille exhaustive");
+                ArrayList<CheckBox> mandatory=new ArrayList<>();
+                if(pts!=null)for(int i=0;i<pts.length();i++){
+                    CheckBox check=new CheckBox(this);
+                    check.setText((i+1)+". "+pts.optString(i));check.setTextColor(WHITE);
+                    check.setTextSize(15);check.setPadding(dp(4),dp(8),dp(4),dp(8));
+                    check.setButtonTintList(android.content.res.ColorStateList.valueOf(BLUE));
+                    add(feedback,check);mandatory.add(check);
+                }
+                sub(feedback,"Cochez uniquement les éléments réellement restitués : si un élément exigé manque, la QROC n'est pas intégralement correcte.");
                 String extra=s(q,"explanation");if(!extra.isEmpty())sub(feedback,extra);
-                buttons(feedback,"À revoir (0)",()->finishQuizQuestion(q,0.0),"Tous les points (1)",()->finishQuizQuestion(q,1.0));
+                add(feedback,button("Valider la restitution intégrale",true,()->{
+                    boolean complete=!mandatory.isEmpty();
+                    for(CheckBox check:mandatory)if(!check.isChecked())complete=false;
+                    finishQuizQuestion(q,complete?1.0:0.0);
+                }));
             }));
         }else{
             CheckBox[] boxes=new CheckBox[5];JSONArray options=arr(q,"options");
@@ -1455,7 +1679,7 @@ public class MainActivity extends Activity {
             }));
         }
         add(p,feedback);
-        buttons(body,"Revenir aux questions",()->go("QUIZ_PICK"),"Ouvrir ce cours",()->openLesson(chap));
+        buttons(body,"Revenir aux questions",()->go("QUESTION_HOME"),"Ouvrir ce cours",()->openLesson(chap));
     }
     private void finishQuizQuestion(JSONObject q,double points){
         long duration=activeQuestionMs();
@@ -1561,7 +1785,10 @@ public class MainActivity extends Activity {
     }
     @Override public void onBackPressed(){
         if(screen.equals("EXAM_PDF")){pauseOriginalTimer();openExamLibrary(currentOriginalCourse);}
-        else if(screen.equals("EXAM_LIBRARY"))go("HOME");
+        else if(screen.equals("ORIGINAL_Q"))go("ORIGINAL_Q_PICK");
+        else if(screen.equals("ORIGINAL_Q_PICK")||screen.equals("QUIZ_PICK")||screen.equals("EXAM_LIBRARY"))go("QUESTION_HOME");
+        else if(screen.equals("QUESTION_HOME"))go("HOME");
+        else if(screen.equals("MAP_IMAGE_DETAIL")||screen.equals("MAP_BOARD"))go("MAP");
         else if(screen.equals("LESSON")||screen.equals("BOARDS")||screen.equals("QUIZ_PICK")||screen.equals("CARD_PICK")||screen.equals("CATALOG"))go("HOME");
         else if(screen.equals("PAGES")||screen.equals("MAP"))go("LESSON");
         else if(screen.equals("MAP_DETAIL"))go("MAP");
