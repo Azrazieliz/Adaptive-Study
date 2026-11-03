@@ -395,11 +395,22 @@ public class MainActivity extends Activity {
         int sourceFacts=entry.optInt("sourceFacts",0);
         int sourcePages=entry.optInt("sourcePageTotal",0);
         boolean linked=status.startsWith("RELATED_CONTENT_ONLY");
+        boolean composite=status.startsWith("COMPOSITE_EXISTING_SOURCE_COURSES");
         boolean incomplete=status.startsWith("SOURCE_GUIDE_INCOMPLETE");
         LinearLayout intro=panel(body);
         heading(intro,"Comprendre et relier les notions");
         if(linked){
             sub(intro,"Ce chapitre ne possède pas de cours source propre dans les fichiers intégrés. Les explications ci-dessous réunissent uniquement des passages de cours voisins et ne remplacent pas la FC manquante.");
+        }else if(composite){
+            sub(intro,"Chapitre composé à partir des FC des sous-chapitres existants. Aucun PDF autonome portant ce titre n'a été fourni. Les faits et les pages restent liés à chaque sous-chapitre.");
+            JSONArray parts=arr(entry,"compositeParts");
+            if(parts!=null)for(int ci=0;ci<parts.length();ci++){
+                JSONObject part=parts.optJSONObject(ci);
+                if(part==null)continue;
+                String id=s(part,"sourceChapter");
+                String title=s(part,"sourceTitle");
+                add(intro,button(title,false,()->openLesson(id)));
+            }
         }else if(incomplete){
             sub(intro,"Couverture partielle. Le texte reprend les repères actuellement structurés, mais ne contient pas tous les éléments du PDF original.");
         }else{
@@ -1123,6 +1134,18 @@ public class MainActivity extends Activity {
                 pageIndex=activeIndexes.get(Math.min(activeIndexes.size()-1,where+1));go("PAGES");
             });
             sub(body,(where+1)+" / "+activeIndexes.size());
+            if(meta!=null&&meta.optBoolean("isComposite",false)){
+                JSONArray parts=arr(meta,"compositeParts");
+                if(parts!=null)for(int j=0;j<parts.length();j++){
+                    JSONObject part=parts.optJSONObject(j);
+                    if(part==null)continue;
+                    int p=pageIndex+1;
+                    if(p>=part.optInt("startPage",999999)&&p<=part.optInt("endPage",0)){
+                        sub(body,"FC source : "+s(part,"sourceTitle")+" — page "+(p-part.optInt("startPage")+1)+" / "+part.optInt("pages"));
+                        break;
+                    }
+                }
+            }
             drawImage(pages.optString(pageIndex));
         }else if(!pdf.isEmpty()){
             sub(body,"PDF original • rendu Android PdfRenderer");
