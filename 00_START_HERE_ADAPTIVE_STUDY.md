@@ -81,3 +81,14 @@ Finish these THREE in one coherent data-generation batch. For each do complete p
 This P0 file MUST be read before later agents build, generate, migrate or modify curriculum. Keep it committed in GitHub, linked as FIRST line of root README, and require its presence in project checks. Do not remove or quietly reinterpret requirements. Reuse existing approved assets, scripts, source links, design and decisions. Academic detail and functional accuracy outrank decorative layout and inflated record counts. Record the current verified versus unverified state honestly, no fabricated progress or missing files.
 
 **NON-NEGOTIABLE RESULT:** No source academic fact lost; no false course completeness; no fake exam questions; no whole-course flashcards; no lost mind maps; no regression in time, grading, coefficients or persistence.
+
+
+## 2026-11-03 USER-APPROVED OVERRIDE — ORIGINAL EXAM PDF UI REMOVAL
+
+The user explicitly authorized removing the module previously called "vraies questions", the original annales/QE PDF library, their PDF/image-page assets and all links to them FROM THE STUDENT APK. This supersedes older clauses requiring original annales/QE PDFs to be visible or included inside the app.
+
+Keep unchanged: newly authored QCM A–E/QROC with explanations, saved grades/progress/timing/coefficients, ALL FC/course source PDFs and images, existing original educational mind maps/boards, Essentiel/Complet/Comprendre, and all original chapter entries.
+
+Keep outside the APK: original annales/QE/ACC PDFs and original question scans, verified and archived in the authorized private recovery workspace for future exam-style question authoring. Do not commit private academic PDFs to public GitHub. This is NOT authorization to discard original evidence.
+
+Curriculum-wide requirement: maintain high technical and molecular depth for every chapter, not only the three exam chapters; fix generic/inaccurate flashcards at their existing IDs where possible and quarantine only unrepairable cards; preserve graded progress. The Complet reader must be text-first with all source-indexed facts reachable by section and original FC pages separately accessible. Existing indexed summaries do NOT equal an exhaustive academic transcription until page-by-page editorial review proves it.
