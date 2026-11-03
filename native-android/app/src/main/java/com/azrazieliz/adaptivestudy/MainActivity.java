@@ -96,6 +96,7 @@ public class MainActivity extends Activity {
         return 90;
     }
     @Override protected void onPause(){
+        if("EXAM_PDF".equals(screen))pauseOriginalTimer();
         if("QUIZ".equals(screen)&&!questionFinalized&&questionStarted>0){
             questionActiveMs+=Math.max(0,SystemClock.elapsedRealtime()-questionStarted);
             questionStarted=0;
@@ -104,6 +105,10 @@ public class MainActivity extends Activity {
     }
     @Override protected void onResume(){
         super.onResume();
+        if("EXAM_PDF".equals(screen)&&currentOriginalDocument!=null&&
+            "SUJET".equals(s(currentOriginalDocument,"part"))&&originalRunning&&originalStart==0){
+            originalStart=SystemClock.elapsedRealtime();
+        }
         if("QUIZ".equals(screen)&&!questionFinalized&&questionStarted==0&&quizIndex<sessionQuestions.size())
             questionStarted=SystemClock.elapsedRealtime();
     }
@@ -140,12 +145,341 @@ public class MainActivity extends Activity {
                 }
                 corpus=new JSONObject(new String(input,"UTF-8"));indexData();
                 try(InputStream ins=getAssets().open("board_catalog.json");ByteArrayOutputStream out=new ByteArrayOutputStream()){byte[] tmp=new byte[16384];int n;while((n=ins.read(tmp))!=-1)out.write(tmp,0,n);boardCatalog=new JSONObject(new String(out.toByteArray(),"UTF-8"));}
+                loadOriginalExamCatalog();
+                loadComprehensionGuides();
                 runOnUiThread(this::render);
             }catch(Exception e){
                 runOnUiThread(()->{root.removeAllViews();TextView err=text("Impossible de charger les cours hors ligne : "+e,16,RED,false);root.addView(err);});
             }
         },"NativeCorpus").start();
     }
+    private JSONObject originalExamCatalog;
+    private JSONObject currentOriginalDocument;
+    private String currentOriginalCourse="";
+    private int originalPage=0,originalMarked=0;
+    private double originalPoints=0.0;
+    private long originalStart=0L,originalAccumMs=0L;
+    private boolean originalRunning=false;
+    private String examSearch="";
+    private void loadOriginalExamCatalog()throws Exception{
+        try(InputStream input=getAssets().open("original_assessment_catalog.json");
+            ByteArrayOutputStream output=new ByteArrayOutputStream()){
+            byte[] buf=new byte[8192];int n;
+            while((n=input.read(buf))!=-1)output.write(buf,0,n);
+            originalExamCatalog=new JSONObject(new String(output.toByteArray(),"UTF-8"));
+        }
+    }
+    private void openExamLibrary(String chapter){
+        currentOriginalCourse=chapter==null?"":chapter;
+        go("EXAM_LIBRARY");
+    }
+    private void showExamLibrary(){
+        heading(body,"Annales et QE originaux");
+        sub(body,"PDF fournis : sujets et corrections conservés sans reformulation ni propositions inventées.");
+        JSONObject all=obj(originalExamCatalog,"courses");
+        if(all==null){sub(body,"Catalogue original absent.");return;}
+        ArrayList<String> chosen=new ArrayList<>();
+        if(!currentOriginalCourse.isEmpty()){
+            chosen.add(currentOriginalCourse);
+            buttons(body,"Tous les cours",()->{currentOriginalCourse="";go("EXAM_LIBRARY");},
+                    "Cours",()->openLesson(currentOriginalCourse));
+        }else{
+            for(JSONObject chapter:chapters){
+                String cid=s(chapter,"id");
+                if(all.has(cid) &&(activeSubject.equals("ALL")||activeSubject.equals(s(chapter,"subjectId"))))
+                    chosen.add(cid);
+            }
+            subjectFilters(body,()->go("EXAM_LIBRARY"));
+            EditText search=new EditText(this);
+            search.setSingleLine(true);search.setTextColor(WHITE);search.setHintTextColor(MUTED);
+            search.setTextSize(14);search.setHint("Rechercher un cours avec annales / QE…");
+            search.setText(examSearch);
+            search.setPadding(dp(12),dp(9),dp(12),dp(9));search.setBackground(bg(PANEL2,0,10));
+            add(body,search);
+            LinearLayout results=vertical();add(body,results);
+            Runnable populate=()->{
+                examSearch=search.getText().toString();
+                results.removeAllViews();
+                int shown=0;
+                for(String cid:chosen){
+                    if(!chapterTitle(cid).toLowerCase(Locale.ROOT).contains(examSearch.toLowerCase(Locale.ROOT)))continue;
+                    addExamCourse(results,cid);
+                    shown++;
+                }
+                if(shown==0)sub(results,"Aucun sujet original accessible dans cette sélection.");
+            };
+            search.addTextChangedListener(new TextWatcher(){
+                public void beforeTextChanged(CharSequence c,int start,int count,int after){}
+                public void onTextChanged(CharSequence c,int start,int before,int count){populate.run();}
+                public void afterTextChanged(Editable e){}
+            });
+            populate.run();
+            LinearLayout notice=panel(body);
+            heading(notice,"Cours sans sujet original");
+            sub(notice,"Certains cours n'ont pas encore de PDF d'annale ou de QE utilisable. Aucun faux QCM ne remplace les documents manquants.");
+            add(notice,button("Voir tous les cours",false,()->go("CATALOG")));
+            return;
+        }
+        for(String cid:chosen)addExamCourse(body,cid);
+    }
+    private void addExamCourse(LinearLayout parent,String cid){
+        JSONArray docs=originalExamCatalog.optJSONObject("courses").optJSONArray(cid);
+        if(docs==null||docs.length()==0){
+            LinearLayout missing=panel(parent);
+            heading(missing,chapterTitle(cid));
+            sub(missing,"Aucun sujet ou corrigé original fourni pour ce cours.");
+            return;
+        }
+        LinearLayout pane=panel(parent);
+        heading(pane,chapterTitle(cid));
+        JSONObject ch=byChapter.get(cid);
+        sub(pane,subjectName(s(ch,"subjectId"))+" • coefficient "+coefficient(s(ch,"subjectId")));
+        for(int i=0;i<docs.length();i++){
+            JSONObject entry=docs.optJSONObject(i);if(entry==null)continue;
+            String type=s(entry,"type"),part=s(entry,"part");
+            String label=(type.equals("QE")?"QE":"Annale")+
+                (part.equals("SUJET")?" — SUJET ORIGINAL":" — CORRIGÉ ORIGINAL")+
+                " • "+entry.optInt("pages")+" pages";
+            add(pane,button(label,part.equals("SUJET"),()->openOriginalPaper(cid,entry)));
+        }
+    }
+    private void openOriginalPaper(String cid,JSONObject doc){
+        currentOriginalCourse=cid;
+        currentOriginalDocument=doc;
+        originalPage=0;originalMarked=0;originalPoints=0;
+        originalAccumMs=0;originalStart=SystemClock.elapsedRealtime();
+        originalRunning="SUJET".equals(s(doc,"part"));
+        go("EXAM_PDF");
+    }
+    private long originalElapsedMs(){
+        return originalAccumMs+(originalRunning&&originalStart>0?
+            Math.max(0,SystemClock.elapsedRealtime()-originalStart):0);
+    }
+    private void pauseOriginalTimer(){
+        if(originalRunning&&originalStart>0){
+            originalAccumMs+=Math.max(0,SystemClock.elapsedRealtime()-originalStart);
+            originalStart=0;
+        }
+    }
+    private void showOriginalPaper(){
+        JSONObject doc=currentOriginalDocument;
+        if(doc==null){openExamLibrary("");return;}
+        String cid=currentOriginalCourse;
+        String type=s(doc,"type"),part=s(doc,"part");
+        heading(body,chapterTitle(cid));
+        sub(body,(type.equals("QE")?"QE":"Annale")+" • "+
+            (part.equals("SUJET")?"Sujet original":"Corrigé original")+
+            " • PDF fourni sans retranscription");
+        if(part.equals("SUJET")){
+            JSONObject subj=subjectMetadata(s(byChapter.get(cid),"subjectId"));
+            JSONObject exam=obj(subj,"exam");
+            int mins=exam==null?0:exam.optInt("durationMin",0);
+            sub(body,"Coefficient "+coefficient(s(byChapter.get(cid),"subjectId"))+
+                " • durée concours indicative "+mins+" min");
+            TextView timer=text("Temps actif : "+fmtSeconds(originalElapsedMs()/1000),15,GREEN,true);
+            add(body,timer);
+            timer.post(new Runnable(){
+                public void run(){
+                    if(!"EXAM_PDF".equals(screen)||currentOriginalDocument!=doc)return;
+                    timer.setText("Temps actif : "+fmtSeconds(originalElapsedMs()/1000));
+                    timer.postDelayed(this,1000);
+                }
+            });
+        }else{
+            sub(body,"Corrigé : contrôler votre réponse directement avec les documents fournis.");
+        }
+        int total=doc.optInt("pages",1);
+        originalPage=Math.max(0,Math.min(originalPage,total-1));
+        final int page=originalPage;
+        buttons(body,"◀ Précédente",()->{originalPage=Math.max(0,page-1);go("EXAM_PDF");},
+                    "Suivante ▶",()->{originalPage=Math.min(total-1,page+1);go("EXAM_PDF");});
+        sub(body,"Page "+(page+1)+" / "+total);
+        showOriginalPdfImage(body,doc,page);
+        JSONArray docs=originalExamCatalog.optJSONObject("courses").optJSONArray(cid);
+        if(docs!=null)for(int i=0;i<docs.length();i++){
+            JSONObject candidate=docs.optJSONObject(i);
+            if(candidate==null||candidate==doc)continue;
+            if(s(candidate,"type").equals(type)&&!s(candidate,"part").equals(part)){
+                String action="CORRECTION".equals(s(candidate,"part"))?"Voir le corrigé fourni":"Revenir au sujet";
+                add(body,button(action,false,()->{
+                    if("CORRECTION".equals(s(candidate,"part"))){
+                        pauseOriginalTimer();originalRunning=false;
+                    }else{
+                        originalRunning=true;originalStart=SystemClock.elapsedRealtime();
+                    }
+                    currentOriginalDocument=candidate;originalPage=0;go("EXAM_PDF");
+                }));
+            }
+        }
+        if(part.equals("SUJET")){
+            LinearLayout scoring=panel(body);
+            heading(scoring,"Auto-correction (après comparaison au corrigé)");
+            sub(scoring,"QCM : 0 erreur = 1 ; 1 erreur = 0,7 ; 2 erreurs = 0,1 ; au-delà = 0.");
+            if("shs".equals(s(byChapter.get(cid),"subjectId"))){
+                buttons(scoring,"QROC incomplète : 0",()->addOriginalScore(0),
+                      "Réponse intégrale : 1",()->addOriginalScore(1));
+            }else{
+                buttons(scoring,"0 erreur • 1",()->addOriginalScore(1),"1 erreur • 0,7",()->addOriginalScore(0.7));
+                buttons(scoring,"2 erreurs • 0,1",()->addOriginalScore(0.1),"3+ erreurs • 0",()->addOriginalScore(0));
+            }
+            sub(scoring,String.format(Locale.FRANCE,"Auto-évaluation : %.1f / %d questions notées",originalPoints,originalMarked));
+        }
+        buttons(body,"Retour aux annales",()->{pauseOriginalTimer();openExamLibrary(cid);},
+                "Voir les cours",()->{pauseOriginalTimer();openLesson(cid);});
+    }
+    private void addOriginalScore(double grade){
+        originalPoints+=grade;originalMarked++;
+        prefs.edit().putInt("original/graded/"+currentOriginalCourse,prefs.getInt("original/graded/"+currentOriginalCourse,0)+1)
+             .putFloat("original/score/"+currentOriginalCourse,
+                prefs.getFloat("original/score/"+currentOriginalCourse,0f)+(float)grade).apply();
+        go("EXAM_PDF");
+    }
+    private void showOriginalPdfImage(LinearLayout target,JSONObject doc,int page){
+        LinearLayout holder=panel(target);
+        sub(holder,"Rendu PDF original…");
+        final String asset=s(doc,"asset");
+        new Thread(()->{
+            try{
+                File pdfFile=new File(getCacheDir(),"original_"+asset.hashCode()+".pdf");
+                if(!pdfFile.exists()||pdfFile.length()!=doc.optLong("bytes")){
+                    try(InputStream input=getAssets().open(asset,AssetManager.ACCESS_STREAMING);
+                        OutputStream output=new FileOutputStream(pdfFile)){
+                        byte[] buffer=new byte[65536];int n;
+                        while((n=input.read(buffer))!=-1)output.write(buffer,0,n);
+                    }
+                }
+                Bitmap bitmap;
+                try(ParcelFileDescriptor fd=ParcelFileDescriptor.open(pdfFile,ParcelFileDescriptor.MODE_READ_ONLY);
+                    PdfRenderer renderer=new PdfRenderer(fd)){
+                    try(PdfRenderer.Page original=renderer.openPage(page)){
+                        int width=1300;int height=Math.max(1,Math.min(3600,Math.round((float)original.getHeight()*width/original.getWidth())));
+                        bitmap=Bitmap.createBitmap(width,height,Bitmap.Config.ARGB_8888);
+                        bitmap.eraseColor(Color.WHITE);
+                        original.render(bitmap,null,null,PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
+                    }
+                }
+                runOnUiThread(()->{
+                    if(!"EXAM_PDF".equals(screen)||currentOriginalDocument!=doc||originalPage!=page){
+                        bitmap.recycle();return;
+                    }
+                    holder.removeAllViews();
+                    ZoomImageView imageView=new ZoomImageView(this);
+                    holder.addView(imageView,new LinearLayout.LayoutParams(-1,dp(580)));
+                    imageView.load(bitmap);
+                });
+            }catch(Exception e){
+                runOnUiThread(()->{holder.removeAllViews();sub(holder,"PDF original indisponible : "+e.getMessage());});
+            }
+        },"OriginalExamPdf").start();
+    }
+
+    private JSONObject comprehensionGuides;
+    private void loadComprehensionGuides()throws Exception{
+        try(InputStream in=getAssets().open("comprehension_texts.json");
+            ByteArrayOutputStream out=new ByteArrayOutputStream()){
+            byte[] b=new byte[16384];int n;
+            while((n=in.read(b))!=-1)out.write(b,0,n);
+            comprehensionGuides=new JSONObject(new String(out.toByteArray(),"UTF-8")).optJSONObject("chapters");
+        }
+    }
+    private void showComprehension(){
+        JSONObject entry=comprehensionGuides==null?null:comprehensionGuides.optJSONObject(currentChapter);
+        if(entry==null){
+            LinearLayout empty=panel(body);
+            heading(empty,"Texte explicatif indisponible");
+            sub(empty,"Aucun texte vérifié pour ce chapitre.");
+            add(empty,button("Consulter les sources",true,()->{pageIndex=0;go("PAGES");}));
+            return;
+        }
+        String status=s(entry,"coverageStatus");
+        int sourceFacts=entry.optInt("sourceFacts",0);
+        int sourcePages=entry.optInt("sourcePageTotal",0);
+        boolean linked=status.startsWith("RELATED_CONTENT_ONLY");
+        boolean incomplete=status.startsWith("SOURCE_GUIDE_INCOMPLETE");
+        LinearLayout intro=panel(body);
+        heading(intro,"Comprendre et relier les notions");
+        if(linked){
+            sub(intro,"Ce chapitre ne possède pas de cours source propre dans les fichiers intégrés. Les explications ci-dessous réunissent uniquement des passages de cours voisins et ne remplacent pas la FC manquante.");
+        }else if(incomplete){
+            sub(intro,"Couverture partielle. Le texte reprend les repères actuellement structurés, mais ne contient pas tous les éléments du PDF original.");
+        }else{
+            sub(intro,"Synthèse textuelle fondée sur les données structurées du cours. L'exhaustivité page par page reste à contrôler.");
+        }
+        sub(intro,entry.optJSONArray("sections")==null?"":entry.optJSONArray("sections").length()+" parties");
+        sub(intro,entry.optInt("paragraphCount")+" paragraphes • "+sourceFacts+
+              " faits réintégrés"+(sourcePages>0?" • "+sourcePages+" pages sources":""));
+        TextView reasoning=text(s(entry,"readingStrategy"),14,BLUE,false);
+        reasoning.setPadding(dp(8),dp(11),dp(8),dp(11));
+        reasoning.setLineSpacing(dp(4),1.08f);
+        add(intro,reasoning);
+        JSONArray sections=arr(entry,"sections");
+        if(sections==null||sections.length()==0){
+            sub(body,"Aucune section disponible dans ce chapitre.");
+            return;
+        }
+        ArrayList<View> locations=new ArrayList<>();
+        Spinner topics=new Spinner(this);
+        ArrayList<String> names=new ArrayList<>();
+        names.add("Aller à une partie…");
+        for(int i=0;i<sections.length();i++){
+            JSONObject section=sections.optJSONObject(i);
+            names.add((i+1)+". "+s(section,"heading"));
+        }
+        ArrayAdapter<String> adapter=new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,names);
+        topics.setAdapter(adapter);
+        add(body,topics);
+        topics.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){
+            public void onNothingSelected(android.widget.AdapterView<?> p){}
+            public void onItemSelected(android.widget.AdapterView<?> p,View v,int pos,long id){
+                if(pos<=0||pos>locations.size())return;
+                View target=locations.get(pos-1);
+                scroll.post(()->scroll.smoothScrollTo(0,Math.max(0,target.getTop())));
+            }
+        });
+        for(int i=0;i<sections.length();i++){
+            JSONObject section=sections.optJSONObject(i);
+            if(section==null)continue;
+            LinearLayout container=vertical();
+            container.setPadding(dp(5),dp(16),dp(5),dp(9));
+            locations.add(container);
+            add(body,container);
+            View line=new View(this);line.setBackgroundColor(Color.rgb(56,83,116));
+            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,dp(1));
+            lp.bottomMargin=dp(14);container.addView(line,lp);
+            heading(container,s(section,"heading"));
+            if(linked){
+                String related=s(section,"relatedCourseTitle");
+                if(!related.isEmpty())sub(container,"Notions issues de : "+related);
+            }
+            JSONArray paras=arr(section,"paragraphs");
+            if(paras!=null)for(int j=0;j<paras.length();j++){
+                String paragraph=paras.optString(j);
+                if(paragraph.isEmpty())continue;
+                TextView t=text(paragraph,16,WHITE,false);
+                t.setTextIsSelectable(true);
+                t.setGravity(Gravity.TOP);
+                t.setLineSpacing(dp(5),1.1f);
+                t.setPadding(dp(4),dp(3),dp(4),dp(11));
+                add(container,t);
+            }
+            JSONArray pg=arr(section,"sourcePages");
+            if(!linked&&pg!=null&&pg.length()>0){
+                int first=pg.optInt(0,0);
+                if(first>0)add(container,button("Consulter la source de cette partie",false,()->{
+                    pageIndex=first-1;go("PAGES");
+                }));
+            }
+            String related=s(section,"relatedChapter");
+            if(linked&&!related.isEmpty()&&byChapter.containsKey(related)){
+                add(container,button("Ouvrir le cours source : "+chapterTitle(related),false,()->openLesson(related)));
+            }
+        }
+        LinearLayout close=panel(body);
+        sub(close,"Ce texte n'ajoute pas de chiffres, de processus ou de détails médicaux extérieurs aux supports actuellement intégrés. Les figures et tableaux originaux restent indispensables.");
+        buttons(close,"Complet (tableaux)",()->{guideMode="COMPLETE";go("LESSON");},
+                "Pages sources",()->{pageIndex=0;go("PAGES");});
+    }
+
     private void indexData(){
         guides=obj(corpus,"courseGuides");mediaPages=obj(corpus,"coursePages");
         mindmaps=obj(corpus,"mindMaps");courseAssets=obj(corpus,"courseAssets");courseMeta=obj(corpus,"courseMeta");
@@ -225,19 +559,22 @@ public class MainActivity extends Activity {
             case "PAGES":showPages(false);break;
             case "MAP":showConceptMap();break;
             case "MAP_DETAIL":showConceptBranch();break;
-            case "QUIZ_PICK":showPick(true);break;
+            case "EXAM_LIBRARY":showExamLibrary();break;
+            case "EXAM_PDF":showOriginalPaper();break;
+            case "QUIZ_PICK":showExamLibrary();break;
             case "CARD_PICK":showPick(false);break;
             case "QUIZ":showQuiz();break;
             case "CARDS":showCard();break;
             default:showHome();
         }
         nav=horizontal();nav.setBackground(bg(PANEL,0,0));nav.setPadding(dp(6),dp(7),dp(6),dp(7));
-        addNav("Accueil","HOME");addNav("Questions","QUIZ_PICK");addNav("Flashcards","CARD_PICK");addNav("Cours","CATALOG");
+        addNav("Accueil","HOME");addNav("Questions","EXAM_LIBRARY");addNav("Flashcards","CARD_PICK");addNav("Cours","CATALOG");
         root.addView(nav,new LinearLayout.LayoutParams(-1,-2));
     }
     private void addNav(String name,String dest){
         boolean active=screen.equals(dest)||((screen.equals("LESSON")||screen.equals("PAGES")||screen.equals("MAP")||screen.equals("MAP_DETAIL")||screen.equals("BOARDS"))&&dest.equals("CATALOG"))
-                ||(screen.equals("QUIZ")&&dest.equals("QUIZ_PICK"))||(screen.equals("CARDS")&&dest.equals("CARD_PICK"));
+                ||(screen.equals("QUIZ")&&dest.equals("EXAM_LIBRARY"))||
+            (screen.equals("EXAM_PDF")&&dest.equals("EXAM_LIBRARY"))||(screen.equals("CARDS")&&dest.equals("CARD_PICK"));
         TextView t=text(name,11,active?BLUE:MUTED,active);t.setGravity(Gravity.CENTER);
         t.setMinHeight(dp(46));t.setBackground(bg(active?PANEL2:PANEL,0,9));t.setOnClickListener(v->go(dest));
         nav.addView(t,new LinearLayout.LayoutParams(0,dp(47),1));
@@ -257,16 +594,22 @@ public class MainActivity extends Activity {
     }
     private void showHome(){
         heading(body,"Réviser. S'entraîner. Progresser.");
-        sub(body,chapters.size()+" cours • "+questions.size()+" questions • "+cards.size()+" flashcards");
+        JSONObject docs=obj(originalExamCatalog,"courses");
+        int examCount=0;
+        if(docs!=null)for(Iterator<String> keys=docs.keys();keys.hasNext();){
+            JSONArray source=docs.optJSONArray(keys.next());if(source!=null)examCount+=source.length();
+        }
+        sub(body,chapters.size()+" cours • "+examCount+" PDF annales/QE fournis • "+cards.size()+" flashcards de révision");
         int attempted=0,correct=0,reviewed=0;
         for(JSONObject q:questions){String id=s(q,"id");if(attempts(id)>0){attempted++;if(lastCorrect(id))correct++;}}
         for(JSONObject c:cards)if(prefs.getInt("cr/"+s(c,"id"),0)>0)reviewed++;
         LinearLayout overview=panel(body);
         heading(overview,"Votre progression");
-        info(overview,"Questions travaillées",attempted+" / "+questions.size()+" • "+(attempted==0?"aucun résultat":(100*correct/attempted)+" % correctes à la dernière tentative"));
+        info(overview,"Annales et QE fournis",examCount+" PDF de sujets/corrigés — documents originaux");
+        if(attempted>0)sub(overview,attempted+" anciens exercices dérivés traités (ne comptent pas comme annales authentifiées).");
         info(overview,"Flashcards révisées",reviewed+" / "+cards.size());
-        buttons(overview,"Faire des questions",()->go("QUIZ_PICK"),"Réviser les cartes",()->go("CARD_PICK"));
-        heading(body,"Priorités adaptatives");
+        buttons(overview,"Annales et QE originaux",()->openExamLibrary(""),"Réviser les cartes",()->go("CARD_PICK"));
+        heading(body,"Révisions — cours existants");
         ArrayList<JSONObject> rank=new ArrayList<>(chapters);
         rank.sort((a,b)->Integer.compare(priorityScore(b),priorityScore(a)));
         int shown=0;
@@ -274,17 +617,22 @@ public class MainActivity extends Activity {
             String id=s(c,"id");if(!questionsByChapter.containsKey(id)&&!cardsByChapter.containsKey(id))continue;
             LinearLayout item=panel(body);
             item.addView(text(subjectName(s(c,"subjectId"))+" • "+s(c,"title"),15,WHITE,true));
-            int n=questionsByChapter.containsKey(id)?questionsByChapter.get(id).size():0;
             int fc=cardsByChapter.containsKey(id)?cardsByChapter.get(id).size():0;
-            sub(item,n+" questions • "+fc+" flashcards • "+(priorityScore(c)>100?"Revoir les erreurs":"Travail conseillé"));
-            buttons(item,"Questions",()->startQuiz(id),"Cours",()->openLesson(id));
+            JSONArray examPapers=docs==null?null:docs.optJSONArray(id);
+            int paperCount=examPapers==null?0:examPapers.length();
+            sub(item,fc+" cartes de révision • "+paperCount+" PDF annales/QE fournis");
+            buttons(item,"Annales / QE",()->startQuiz(id),"Cours",()->openLesson(id));
             if(++shown>=5)break;
         }
         heading(body,"Matières");
         for(Map.Entry<String,String> sb:subjects.entrySet()){
-            String sid=sb.getKey();int courseCount=0,qCount=0;
-            for(JSONObject c:chapters)if(s(c,"subjectId").equals(sid)){courseCount++;ArrayList<Integer> a=questionsByChapter.get(s(c,"id"));if(a!=null)qCount+=a.size();}
-            LinearLayout p=panel(body);p.addView(text(sb.getValue(),16,WHITE,true));sub(p,courseCount+" cours • "+qCount+" questions");
+            String sid=sb.getKey();int courseCount=0,paperCount=0;
+            for(JSONObject c:chapters)if(s(c,"subjectId").equals(sid)){
+                courseCount++;
+                JSONArray a=docs==null?null:docs.optJSONArray(s(c,"id"));
+                if(a!=null)paperCount+=a.length();
+            }
+            LinearLayout p=panel(body);p.addView(text(sb.getValue(),16,WHITE,true));sub(p,courseCount+" cours • "+paperCount+" PDF annales/QE");
             p.setOnClickListener(v->{activeSubject=sid;go("CATALOG");});
         }
     }
@@ -326,7 +674,7 @@ public class MainActivity extends Activity {
                 int nq=questionsByChapter.containsKey(id)?questionsByChapter.get(id).size():0;
                 int nf=cardsByChapter.containsKey(id)?cardsByChapter.get(id).size():0;
                 boolean guide=guides!=null&&guides.optJSONObject(id)!=null;
-                sub(p,subjectName(sid)+" • "+nq+" Q • "+nf+" cartes • "+(guide?"Fiche structurée (couverture variable)":"Guide non disponible"));
+                sub(p,subjectName(sid)+" • "+nf+" cartes de révision • "+(guide?"Fiche structurée : couverture variable":"Leçon absente — source à intégrer"));
                 p.setOnClickListener(v->openLesson(id));count++;
             }
             if(count==0)sub(list,"Aucun cours correspondant.");
@@ -338,7 +686,7 @@ public class MainActivity extends Activity {
         });
         update.run();
     }
-    private void openLesson(String id){currentChapter=id;guideMode="ESSENTIAL";boardIndex=0;boardRevealed=true;boardAnswerDraft="";go("LESSON");}
+    private void openLesson(String id){currentChapter=id;guideMode="UNDERSTAND";boardIndex=0;boardRevealed=true;boardAnswerDraft="";go("LESSON");}
     private boolean isFormulaSubject(String subject){
         return "phys".equals(subject)||"chimie".equals(subject);
     }
@@ -547,6 +895,9 @@ public class MainActivity extends Activity {
             sub(notice,"SHS, histologie et biologie cellulaire : toutes les données des tableaux originaux doivent être mémorisées.");
             add(notice,button("Réviser les tableaux originaux",true,()->{boardIndex=0;boardRevealed=true;go("BOARDS");}));
         }
+        boolean understanding="UNDERSTAND".equals(guideMode);
+        add(body,button(understanding?"Comprendre — lecture détaillée":"Comprendre — explications détaillées",
+                understanding,()->{guideMode="UNDERSTAND";go("LESSON");}));
         LinearLayout menu=horizontal();
         String[] names={"Essentiel","Complet","Pages","Carte"};
         for(int i=0;i<names.length;i++){
@@ -562,6 +913,7 @@ public class MainActivity extends Activity {
             menu.addView(tab,lp);
         }
         add(body,menu);
+        if("UNDERSTAND".equals(guideMode)){showComprehension();return;}
         JSONObject guide=guides==null?null:guides.optJSONObject(currentChapter);
         JSONArray sections=arr(guide,"sections");
         if(sections==null||sections.length()==0){
@@ -569,6 +921,19 @@ public class MainActivity extends Activity {
             sub(missing,"Fiche structurée indisponible. Les pages originales restent accessibles.");
             add(missing,button("Lire la source",true,()->{pageIndex=0;go("PAGES");}));
             return;
+        }
+        int sourceCount=0;JSONArray originalPages=mediaPages==null?null:mediaPages.optJSONArray(currentChapter);
+        if(originalPages!=null)sourceCount=originalPages.length();
+        int available=0;
+        for(int ii=0;ii<sections.length();ii++){
+            JSONObject ss=sections.optJSONObject(ii);
+            JSONArray list=arr(ss,"items");if(list!=null)available+=list.length();
+        }
+        if(sourceCount>0&&available<sourceCount*3){
+            LinearLayout warning=panel(body);
+            heading(warning,"Couverture insuffisante");
+            sub(warning,available+" points structurés pour "+sourceCount+" pages sources. Cette leçon ne peut pas être considérée comme complète.");
+            add(warning,button("Consulter les pages sources",true,()->{pageIndex=0;go("PAGES");}));
         }
         int displayed=0,total=0;
         boolean essential="ESSENTIAL".equals(guideMode);
@@ -720,7 +1085,7 @@ public class MainActivity extends Activity {
             add(review,button("OUBLI OU ERREUR - RECOMMENCER",false,()->gradeBoard(unit,false,total)));
             sub(review,"Score = declaration personnelle apres comparaison. Aucune notation automatique de votre restitution n'est pretendue.");
         }
-        buttons(body,"Cours structuré (tous les détails saisis)",()->{guideMode="COMPLETE";go("LESSON");},"Questions du cours",()->startQuiz(currentChapter));
+        buttons(body,"Cours structuré",()->{guideMode="COMPLETE";go("LESSON");},"Annales / QE originaux",()->openExamLibrary(currentChapter));
     }
 
     private InputStream media(String rel)throws IOException {
@@ -962,7 +1327,7 @@ public class MainActivity extends Activity {
     }
     private void showPick(boolean quiz){
         heading(body,quiz?"Choisir les questions":"Choisir les flashcards");
-        sub(body,quiz?"QCM A–E avec corrections par proposition ; QROC SHS exhaustives.":"Cartes à rappel actif, échéances locales et autoévaluation.");
+        sub(body,quiz?"Exercices reconstruits depuis les guides — NON issus d’annales authentifiées.":"Cartes de rappel issues des notes, pas des questions originales d’examen.");
         subjectFilters(body,()->go(quiz?"QUIZ_PICK":"CARD_PICK"));
         ArrayList<Integer> together=new ArrayList<>();
         for(JSONObject ch:chapters)if(activeSubject.equals("ALL")||activeSubject.equals(s(ch,"subjectId"))){
@@ -984,11 +1349,7 @@ public class MainActivity extends Activity {
             pp.setOnClickListener(v->{if(quiz)startQuiz(id);else startCards(id);});
         }
     }
-    private void startQuiz(String id){
-        ArrayList<Integer> items=questionsByChapter.get(id);
-        if(items==null||items.isEmpty()){currentChapter=id;go("QUIZ_PICK");return;}
-        launchQuiz(items);
-    }
+    private void startQuiz(String id){openExamLibrary(id);}
     private void launchQuiz(List<Integer> ids){
         sessionQuestions.clear();sessionQuestions.addAll(ids);
         if(sessionQuestions.size()>20){
@@ -1176,7 +1537,9 @@ public class MainActivity extends Activity {
         cardReviewed++;cardIndex++;go("CARDS");
     }
     @Override public void onBackPressed(){
-        if(screen.equals("LESSON")||screen.equals("BOARDS")||screen.equals("QUIZ_PICK")||screen.equals("CARD_PICK")||screen.equals("CATALOG"))go("HOME");
+        if(screen.equals("EXAM_PDF")){pauseOriginalTimer();openExamLibrary(currentOriginalCourse);}
+        else if(screen.equals("EXAM_LIBRARY"))go("HOME");
+        else if(screen.equals("LESSON")||screen.equals("BOARDS")||screen.equals("QUIZ_PICK")||screen.equals("CARD_PICK")||screen.equals("CATALOG"))go("HOME");
         else if(screen.equals("PAGES")||screen.equals("MAP"))go("LESSON");
         else if(screen.equals("MAP_DETAIL"))go("MAP");
         else if(screen.equals("QUIZ"))go("QUIZ_PICK");
