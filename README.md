@@ -1,3 +1,5 @@
+> **P0: BUILD FROZEN BY USER until all 76+ chapters are scientifically restructured and reviewed:** [00_BUILD_HOLD_UNTIL_FULL_ACADEMIC_RESTRUCTURE.md](00_BUILD_HOLD_UNTIL_FULL_ACADEMIC_RESTRUCTURE.md). No new APK, build, install or distribution.
+
 > **P0 / READ FIRST:** [00_START_HERE_ADAPTIVE_STUDY.md](00_START_HERE_ADAPTIVE_STUDY.md) — binding rules for every course, Essentiel, Complet, Comprendre, exam QCM/QROC, flashcard, mind map, data migration and APK release.
 
 # Concours — Adaptive Study

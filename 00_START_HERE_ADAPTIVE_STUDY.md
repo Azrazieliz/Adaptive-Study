@@ -1,3 +1,5 @@
+> **CURRENT USER OVERRIDE (2026-11-04): FULL ACADEMIC RESTRUCTURING FIRST. NO BUILDS OR APK RELEASES until completion. Read [00_BUILD_HOLD_UNTIL_FULL_ACADEMIC_RESTRUCTURE.md](00_BUILD_HOLD_UNTIL_FULL_ACADEMIC_RESTRUCTURE.md) before any work.**
+
 # 00 — ADAPTIVE STUDY CANONICAL CONTENT CONTRACT (P0)
 
 **READ FIRST, ALWAYS.** This is the highest-priority, binding implementation and academic-content document in Azrazieliz/Adaptive-Study. Read it before changing any Android screen, build, course, flashcard, question, mind map, grading logic or generated content. Effective: 2026-11-03. The current native Android app is a CONTINUATION, not a restart.
