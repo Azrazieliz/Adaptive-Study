@@ -1,3 +1,5 @@
+> **CURRENT EXAM SCOPE (2026-11-05): ALL subjects and ALL courses. SHS, Histology and Cell Biology share exhaustive memorization priority; course content must be finished before questions and flashcards.** Read [00_EXAM_SCOPE_20261105.md](00_EXAM_SCOPE_20261105.md) first.
+
 > **CURRENT USER OVERRIDE (2026-11-04): FULL ACADEMIC RESTRUCTURING FIRST. NO BUILDS OR APK RELEASES until completion. Read [00_BUILD_HOLD_UNTIL_FULL_ACADEMIC_RESTRUCTURE.md](00_BUILD_HOLD_UNTIL_FULL_ACADEMIC_RESTRUCTURE.md) before any work.**
 
 # 00 — ADAPTIVE STUDY CANONICAL CONTENT CONTRACT (P0)
