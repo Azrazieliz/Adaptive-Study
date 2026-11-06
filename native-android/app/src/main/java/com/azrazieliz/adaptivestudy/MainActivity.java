@@ -42,6 +42,12 @@ public class MainActivity extends Activity {
     private final HashMap<String,JSONObject> byChapter=new HashMap<>();
     private final HashMap<String,ArrayList<Integer>> questionsByChapter=new HashMap<>(), cardsByChapter=new HashMap<>();
     private String screen="HOME", currentChapter="", activeSubject="ALL", guideMode="ESSENTIAL";
+    private final ArrayList<JSONObject> importedSources=new ArrayList<>();
+    private String currentImportedPdfPath="";
+    private int muscleSourcePage=0;
+    private static final String MUSCLE_FULL_SOURCE="assets/new-course-source/histo_muscles1/fc-1.pdf";
+    private int importedPdfPage=0;
+    private static final int IMPORT_COURSES_REQUEST=7201;
     private int pageIndex=0, cardIndex=0, quizIndex=0, quizCorrect=0, quizAnswered=0, cardReviewed=0, boardIndex=0, shsCorrectionIndex=0;
     private boolean boardRevealed=true;
     private String boardAnswerDraft="";
@@ -142,6 +148,7 @@ public class MainActivity extends Activity {
                     byte[] buf=new byte[32768];int n;while((n=is.read(buf))!=-1)b.write(buf,0,n);input=b.toByteArray();
                 }
                 corpus=new JSONObject(new String(input,"UTF-8"));indexData();
+                loadImportedCourseIndex();
                 try(InputStream ins=getAssets().open("board_catalog.json");ByteArrayOutputStream out=new ByteArrayOutputStream()){byte[] tmp=new byte[16384];int n;while((n=ins.read(tmp))!=-1)out.write(tmp,0,n);boardCatalog=new JSONObject(new String(out.toByteArray(),"UTF-8"));}
                 try(InputStream ins=getAssets().open("shs_corrections_direct.json");ByteArrayOutputStream out=new ByteArrayOutputStream()){
                     byte[] tmp=new byte[16384];int n;while((n=ins.read(tmp))!=-1)out.write(tmp,0,n);
@@ -853,6 +860,8 @@ public class MainActivity extends Activity {
             case "LESSON":subjectLesson();break;
             case "BOARDS":showBoards();break;
             case "PAGES":showPages(false);break;
+            case "IMPORTED_PDF":showImportedPdf();break;
+            case "MUSCLE_FULL_PDF":showMuscleCompleteSource();break;
             case "MAP":showConceptMap();break;
             case "MAP_PICK":showMapPicker();break;
             case "SHS_CORRECTIONS":showSHSCorrections();break;
@@ -957,8 +966,225 @@ public class MainActivity extends Activity {
         }
         add(target,hsv);
     }
+
+    private File importedIndexFile(){return new File(getFilesDir(),"imported_course_sources_v1.json");}
+    private String matchedCourseId(String filename){
+        String n=java.text.Normalizer.normalize(filename,java.text.Normalizer.Form.NFD)
+            .replaceAll("\\p{M}+","").toLowerCase(Locale.ROOT);
+        // Do not silently import exam subjects/corrections as FC course content.
+        if(!n.endsWith(".pdf")||!(n.contains("fc ")||n.contains("fc_")||n.contains("actualisee")))return "";
+        if(n.contains("ondes")||n.contains("acoustique"))return "phys_ondes_acoustique_fc7";
+        if(n.contains("semaine 2"))return "histo_semaine2_complete_fc";
+        if(n.contains("semaine 3"))return "histo_semaine3";
+        if(n.contains("financement"))return "sp_financement";
+        if(n.contains("gene")&&n.contains("proteine"))return "bio_gene_proteine";
+        return "";
+    }
+    private void registerImportedChapter(String id){
+        if(byChapter.containsKey(id))return;  // Existing chapters never duplicated.
+        String subject=id.startsWith("histo_")?"histo":id.startsWith("sp_")?"sp":
+                       id.startsWith("phys_")?"phys":"bio";
+        String title=id.equals("histo_semaine3")?"Troisième semaine du développement embryonnaire":
+                     id.equals("histo_semaine2_complete_fc")?"Deuxième semaine du développement — Parties 1 et 2 (nouvelle FC)":
+                     id.equals("phys_ondes_acoustique_fc7")?"Ondes et acoustique — Parties 1 à 3 (nouvelle FC)":
+                     id.equals("sp_financement")?"Financement des soins en France":
+                     "Du gène à la protéine";
+        try{
+            JSONObject c=new JSONObject().put("id",id).put("title",title).put("subjectId",subject);
+            chapters.add(c);byChapter.put(id,c);
+            if(guides!=null&&!guides.has(id))
+                guides.put(id,new JSONObject().put("sections",new JSONArray()));
+        }catch(Exception ignored){}
+    }
+    private boolean hasImportedSource(String chapter){
+        for(JSONObject r:importedSources)if(chapter.equals(s(r,"chapterId")))return true;
+        return false;
+    }
+    private void loadImportedCourseIndex(){
+        File file=importedIndexFile();
+        if(!file.isFile())return;
+        try(InputStream in=new FileInputStream(file);
+            ByteArrayOutputStream out=new ByteArrayOutputStream()){
+            byte[] buf=new byte[8192];int n;
+            while((n=in.read(buf))!=-1)out.write(buf,0,n);
+            JSONArray a=new JSONArray(new String(out.toByteArray(),"UTF-8"));
+            importedSources.clear();
+            for(int i=0;i<a.length();i++){
+                JSONObject v=a.optJSONObject(i);
+                if(v==null)continue;
+                File pdf=new File(getFilesDir(),s(v,"relativePath"));
+                if(!pdf.isFile()||pdf.length()==0)continue;
+                importedSources.add(v);registerImportedChapter(s(v,"chapterId"));
+            }
+        }catch(Exception ignored){}
+    }
+    private synchronized void persistImportedCourseIndex()throws Exception{
+        JSONArray a=new JSONArray();for(JSONObject r:importedSources)a.put(r);
+        try(OutputStream out=new FileOutputStream(importedIndexFile())){
+            out.write(a.toString().getBytes("UTF-8"));
+        }
+    }
+    private void requestCourseArchive(){
+        android.content.Intent intent=new android.content.Intent(android.content.Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(android.content.Intent.CATEGORY_OPENABLE);
+        intent.setType("*/*");
+        intent.putExtra(android.content.Intent.EXTRA_MIME_TYPES,
+            new String[]{"application/zip","application/x-zip-compressed","application/octet-stream"});
+        startActivityForResult(intent,IMPORT_COURSES_REQUEST);
+    }
+    @Override protected void onActivityResult(int requestCode,int resultCode,android.content.Intent data){
+        super.onActivityResult(requestCode,resultCode,data);
+        if(requestCode!=IMPORT_COURSES_REQUEST||resultCode!=RESULT_OK||data==null||data.getData()==null)return;
+        android.net.Uri uri=data.getData();
+        Toast.makeText(this,"Importation hors ligne des FC…",Toast.LENGTH_LONG).show();
+        new Thread(()->{
+            String message;
+            try(InputStream raw=getContentResolver().openInputStream(uri)){
+                if(raw==null)throw new IOException("Fichier inaccessible");
+                int imported=0,duplicates=0;
+                File dir=new File(getFilesDir(),"imported_courses");
+                if(!dir.exists()&&!dir.mkdirs())throw new IOException("Stockage indisponible");
+                try(java.util.zip.ZipInputStream zip=new java.util.zip.ZipInputStream(new BufferedInputStream(raw))){
+                    java.util.zip.ZipEntry entry;
+                    while((entry=zip.getNextEntry())!=null){
+                        if(entry.isDirectory())continue;
+                        String rawName=entry.getName();
+                        String baseName=rawName.substring(rawName.lastIndexOf('/')+1);
+                        String id=matchedCourseId(baseName);
+                        if(id.isEmpty())continue;
+                        java.security.MessageDigest digest=java.security.MessageDigest.getInstance("SHA-256");
+                        File temp=File.createTempFile("course_",".tmp",dir);
+                        try(OutputStream out=new BufferedOutputStream(new FileOutputStream(temp))){
+                            byte[] buf=new byte[32768];int n;long size=0;
+                            while((n=zip.read(buf))!=-1){
+                                size+=n;if(size>100_000_000L)throw new IOException("Document supérieur à 100 Mo");
+                                digest.update(buf,0,n);out.write(buf,0,n);
+                            }
+                        }
+                        StringBuilder hs=new StringBuilder();
+                        for(byte b:digest.digest())hs.append(String.format(Locale.ROOT,"%02x",b&255));
+                        String hash=hs.toString();boolean found=false;
+                        for(JSONObject rec:importedSources)if(hash.equals(s(rec,"sha256"))){found=true;break;}
+                        if(found){duplicates++;temp.delete();continue;}
+                        String relative="imported_courses/"+hash+".pdf";
+                        File file=new File(getFilesDir(),relative);
+                        if(!temp.renameTo(file)){temp.delete();throw new IOException("Écriture du PDF impossible");}
+                        JSONObject rec=new JSONObject()
+                            .put("sha256",hash).put("chapterId",id)
+                            .put("relativePath",relative).put("sourceName",baseName);
+                        importedSources.add(rec);registerImportedChapter(id);
+                        imported++;
+                    }
+                }
+                persistImportedCourseIndex();
+                message=imported+" FC importées • "+duplicates+" doublons ignorés. Les sujets et corrigés ne sont pas ajoutés comme cours.";
+            }catch(Exception e){message="Échec importation : "+e.getMessage();}
+            String finish=message;
+            runOnUiThread(()->{
+                Toast.makeText(this,finish,Toast.LENGTH_LONG).show();
+                go("CATALOG");
+            });
+        },"FCImporter").start();
+    }
+    private void showImportedSourceButtons(){
+        int k=0;
+        for(JSONObject record:importedSources){
+            if(!currentChapter.equals(s(record,"chapterId")))continue;
+            final String rel=s(record,"relativePath");
+            final String name=s(record,"sourceName");
+            k++;
+            add(body,button("Lire la FC actualisée "+k+" — PDF original",true,()->{
+                currentImportedPdfPath=rel;importedPdfPage=0;go("IMPORTED_PDF");
+            }));
+            sub(body,name+" • conservée sans modification");
+        }
+    }
+
+    private void showMuscleCompleteSource(){
+        heading(body,"Tissus musculaires — Parties 1 et 2");
+        sub(body,"Source complète de 42 pages. La synthèse textuelle actuelle reste incomplète pour la Partie 2.");
+        buttons(body,"Première page",()->{muscleSourcePage=0;go("MUSCLE_FULL_PDF");},
+                     "Aller à la page 20",()->{muscleSourcePage=19;go("MUSCLE_FULL_PDF");});
+        LinearLayout holder=panel(body);
+        holder.addView(text("Chargement du PDF source…",14,MUTED,false));
+        final int desiredPage=muscleSourcePage;
+        new Thread(()->{
+            try {
+                File cached=new File(getCacheDir(),"muscle_fc_parts_1_2.pdf");
+                if(!cached.isFile()||cached.length()==0){
+                    try(InputStream in=media(MUSCLE_FULL_SOURCE);
+                        OutputStream out=new BufferedOutputStream(new FileOutputStream(cached))){
+                        byte[] buf=new byte[32768];int n;
+                        while((n=in.read(buf))!=-1)out.write(buf,0,n);
+                    }
+                }
+                try(ParcelFileDescriptor fd=ParcelFileDescriptor.open(cached,ParcelFileDescriptor.MODE_READ_ONLY);
+                    PdfRenderer renderer=new PdfRenderer(fd)){
+                    int count=renderer.getPageCount();
+                    int pageNumber=Math.max(0,Math.min(count-1,desiredPage));
+                    try(PdfRenderer.Page page=renderer.openPage(pageNumber)){
+                        int w=1400;
+                        int h=Math.min(2600,Math.max(1,(int)(w*(float)page.getHeight()/page.getWidth())));
+                        Bitmap img=Bitmap.createBitmap(w,h,Bitmap.Config.ARGB_8888);
+                        img.eraseColor(Color.WHITE);
+                        page.render(img,null,null,PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
+                        runOnUiThread(()->{
+                            if(!"MUSCLE_FULL_PDF".equals(screen)){img.recycle();return;}
+                            holder.removeAllViews();
+                            sub(holder,"Page "+(pageNumber+1)+" / "+count);
+                            buttons(holder,"◀ Précédente",()->{muscleSourcePage=Math.max(0,pageNumber-1);go("MUSCLE_FULL_PDF");},
+                                   "Suivante ▶",()->{muscleSourcePage=Math.min(count-1,pageNumber+1);go("MUSCLE_FULL_PDF");});
+                            ZoomImageView viewer=new ZoomImageView(this);
+                            holder.addView(viewer,new LinearLayout.LayoutParams(-1,dp(590)));
+                            viewer.load(img);
+                            add(holder,button("Adapter à la page",true,viewer::fitToPage));
+                        });
+                    }
+                }
+            }catch(Exception e){
+                runOnUiThread(()->sub(holder,"Source indisponible dans ce paquet : "+e.getMessage()));
+            }
+        },"OriginalMusclePdf").start();
+        add(body,button("Revenir au cours",false,()->go("LESSON")));
+    }
+
+    private void showImportedPdf(){
+        File f=new File(getFilesDir(),currentImportedPdfPath);
+        if(!f.isFile()){sub(body,"Source introuvable");return;}
+        heading(body,chapterTitle(currentChapter)+" — FC originale");
+        LinearLayout holder=panel(body);
+        holder.addView(text("Chargement de la page…",14,MUTED,false));
+        new Thread(()->{
+            try(ParcelFileDescriptor fd=ParcelFileDescriptor.open(f,ParcelFileDescriptor.MODE_READ_ONLY);
+                PdfRenderer renderer=new PdfRenderer(fd)){
+                int count=renderer.getPageCount();
+                int p=Math.max(0,Math.min(count-1,importedPdfPage));
+                try(PdfRenderer.Page page=renderer.openPage(p)){
+                    int w=1400,h=Math.min(2400,Math.max(1,(int)(w*(float)page.getHeight()/page.getWidth())));
+                    Bitmap bitmap=Bitmap.createBitmap(w,h,Bitmap.Config.ARGB_8888);
+                    bitmap.eraseColor(Color.WHITE);
+                    page.render(bitmap,null,null,PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
+                    runOnUiThread(()->{
+                        if(!"IMPORTED_PDF".equals(screen)){bitmap.recycle();return;}
+                        holder.removeAllViews();
+                        sub(holder,"Page "+(p+1)+" / "+count+" • zoom et déplacement");
+                        buttons(holder,"◀",()->{importedPdfPage=Math.max(0,p-1);go("IMPORTED_PDF");},
+                            "▶",()->{importedPdfPage=Math.min(count-1,p+1);go("IMPORTED_PDF");});
+                        ZoomImageView image=new ZoomImageView(this);
+                        holder.addView(image,new LinearLayout.LayoutParams(-1,dp(580)));
+                        image.load(bitmap);
+                        add(holder,button("Adapter à la page",true,image::fitToPage));
+                    });
+                }
+            }catch(Exception error){runOnUiThread(()->sub(holder,"PDF illisible : "+error.getMessage()));}
+        },"ImportedPdfReader").start();
+        add(body,button("Revenir au cours",false,()->go("LESSON")));
+    }
+
     private void showCatalog(){
         heading(body,"Bibliothèque de cours");
+        add(body,button("Importer les nouvelles FC (ZIP)",true,()->requestCourseArchive()));
+        if(!importedSources.isEmpty())sub(body,importedSources.size()+" documents FC actualisés importés • doublons ignorés • originaux conservés.");
         subjectFilters(body,()->go("CATALOG"));
         EditText search=new EditText(this);search.setTextSize(15);search.setSingleLine(true);
         search.setTextColor(WHITE);search.setHintTextColor(MUTED);search.setHint("Rechercher un cours…");
@@ -976,7 +1202,8 @@ public class MainActivity extends Activity {
                 int nq=questionsByChapter.containsKey(id)?questionsByChapter.get(id).size():0;
                 int nf=cardsByChapter.containsKey(id)?cardsByChapter.get(id).size():0;
                 boolean guide=guides!=null&&guides.optJSONObject(id)!=null;
-                sub(p,subjectName(sid)+" • "+nf+" cartes de révision • "+(guide?"Fiche structurée : couverture variable":"Leçon absente — source à intégrer"));
+                boolean imported=hasImportedSource(id);
+                sub(p,subjectName(sid)+" • "+nf+" cartes de révision • "+(imported?"FC actualisée importée":guide?"Fiche structurée : couverture variable":"Leçon absente — source à intégrer"));
                 p.setOnClickListener(v->openLesson(id));count++;
             }
             if(count==0)sub(list,"Aucun cours correspondant.");
@@ -1195,6 +1422,13 @@ public class MainActivity extends Activity {
         if(chapter==null){showCatalog();return;}
         String subject=s(chapter,"subjectId");
         heading(body,s(chapter,"title"));
+        showImportedSourceButtons();
+        if("histo_muscles1".equals(currentChapter)){
+            sub(body,"PARTIE 2 : transcription structurée encore incomplète. La source originale de 42 pages est accessible ci-dessous.");
+            add(body,button("Tissus musculaires — source complète Parties 1 et 2 (42 pages)",true,()->{
+                muscleSourcePage=0;go("MUSCLE_FULL_PDF");
+            }));
+        }
         if(isMemorySubject(currentChapter)){
             LinearLayout notice=panel(body);
             sub(notice,"SHS, histologie et biologie cellulaire : toutes les données des tableaux originaux doivent être mémorisées.");
@@ -1517,6 +1751,7 @@ public class MainActivity extends Activity {
         }
     }
 
+    private ZoomImageView activeMapImage;
     private int mindMapDetailIndex=0;
     private void showConceptMap(){
         JSONObject mind=mindmaps==null?null:mindmaps.optJSONObject(currentChapter);
@@ -1528,6 +1763,7 @@ public class MainActivity extends Activity {
         sub(body,"Cartes originales restaurées depuis le projet antérieur, sans remplacement graphique.");
         add(body,button("Voir les tableaux et relations lisibles",false,()->go("MAP_BOARD")));
         drawImage(s(mind,"path"));
+        add(body,button("Adapter la carte à la page",true,()->{if(activeMapImage!=null)activeMapImage.fitToPage();}));
         JSONArray branches=arr(mind,"subMaps");
         if(branches!=null&&branches.length()>0){
             heading(body,"Cartes détaillées");
@@ -1555,6 +1791,7 @@ public class MainActivity extends Activity {
             mindMapDetailIndex=Math.min(branches.length()-1,mindMapDetailIndex+1);go("MAP_IMAGE_DETAIL");
         });
         drawImage(s(page,"path"));
+        add(body,button("Adapter la carte à la page",true,()->{if(activeMapImage!=null)activeMapImage.fitToPage();}));
         buttons(body,"Toutes les cartes",()->go("MAP"),"Liste textuelle",()->go("MAP_BOARD"));
     }
 
@@ -1667,6 +1904,7 @@ public class MainActivity extends Activity {
         final ZoomImageView image=new ZoomImageView(this);
         image.setBackground(bg(PANEL,Color.rgb(45,67,94),12));
         LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,dp(560));target.addView(image,lp);
+        if(screen.equals("MAP")||screen.equals("MAP_IMAGE_DETAIL"))activeMapImage=image;
         image.setTag(path);
         new Thread(()->{
             try(InputStream in=media(path)){
@@ -1676,7 +1914,17 @@ public class MainActivity extends Activity {
                 BitmapFactory.Options opts=new BitmapFactory.Options();opts.inSampleSize=sample;
                 Bitmap b=BitmapFactory.decodeStream(in,null,opts);
                 if(b==null)throw new IOException("Image absente");
-                runOnUiThread(()->{if(path.equals(image.getTag()))image.load(b);else b.recycle();});
+                runOnUiThread(()->{
+                    if(!path.equals(image.getTag())){b.recycle();return;}
+                    if(screen.equals("MAP")||screen.equals("MAP_IMAGE_DETAIL")){
+                        int displayWidth=Math.max(dp(220),getResources().getDisplayMetrics().widthPixels-dp(48));
+                        int imageHeight=Math.round(displayWidth*(float)b.getHeight()/Math.max(1,b.getWidth()));
+                        imageHeight=Math.max(dp(150),Math.min(dp(850),imageHeight));
+                        LinearLayout.LayoutParams fitted=(LinearLayout.LayoutParams)image.getLayoutParams();
+                        fitted.height=imageHeight;image.setLayoutParams(fitted);
+                    }
+                    image.load(b);
+                });
             }catch(Exception e){runOnUiThread(()->sub(target,"Image indisponible : "+path));}
         },"NativeImage").start();
     }
@@ -1939,7 +2187,8 @@ public class MainActivity extends Activity {
         cardReviewed++;cardIndex++;go("CARDS");
     }
     @Override public void onBackPressed(){
-        if(screen.equals("SHS_CORRECTIONS"))go("QUESTION_HOME");
+        if(screen.equals("IMPORTED_PDF")||screen.equals("MUSCLE_FULL_PDF"))go("LESSON");
+        else if(screen.equals("SHS_CORRECTIONS"))go("QUESTION_HOME");
         else if(screen.equals("MAP_PICK"))go("CATALOG");
         else if(screen.equals("QUIZ_PICK"))go("QUESTION_HOME");
         else if(screen.equals("QUESTION_HOME"))go("HOME");
@@ -1970,12 +2219,20 @@ public class MainActivity extends Activity {
         void load(Bitmap b){
             Bitmap old=bitmap;bitmap=b;setImageBitmap(b);
             if(old!=null&&old!=b&&!old.isRecycled())old.recycle();
-            post(()->{
-                if(bitmap!=b||getWidth()==0)return;
-                matrix.reset();float fit=Math.min((float)getWidth()/b.getWidth(),(float)getHeight()/b.getHeight());
-                float tx=(getWidth()-fit*b.getWidth())/2f,ty=(getHeight()-fit*b.getHeight())/2f;
-                matrix.postScale(fit,fit);matrix.postTranslate(tx,ty);scale=1f;setImageMatrix(matrix);
-            });
+            post(this::fitToPage);
+        }
+        void fitToPage(){
+            Bitmap b=bitmap;
+            if(b==null||b.isRecycled()||getWidth()==0||getHeight()==0)return;
+            matrix.reset();
+            float fit=Math.min((float)getWidth()/b.getWidth(),(float)getHeight()/b.getHeight());
+            float tx=(getWidth()-fit*b.getWidth())/2f,ty=(getHeight()-fit*b.getHeight())/2f;
+            matrix.postScale(fit,fit);matrix.postTranslate(tx,ty);
+            scale=1f;setImageMatrix(matrix);
+        }
+        @Override protected void onSizeChanged(int w,int h,int oldw,int oldh){
+            super.onSizeChanged(w,h,oldw,oldh);
+            post(this::fitToPage);
         }
         @Override public boolean onTouchEvent(MotionEvent ev){
             detector.onTouchEvent(ev);
