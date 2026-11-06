@@ -36,13 +36,13 @@ public class MainActivity extends Activity {
     private LinearLayout root, body, nav, titleBar;
     private ScrollView scroll;
     private SharedPreferences prefs;
-    private JSONObject corpus, guides, mediaPages, mindmaps, courseAssets, courseMeta, boardCatalog;
+    private JSONObject corpus, guides, mediaPages, mindmaps, courseAssets, courseMeta, boardCatalog, shsCorrections;
     private final ArrayList<JSONObject> chapters=new ArrayList<>(), questions=new ArrayList<>(), cards=new ArrayList<>();
     private final LinkedHashMap<String,String> subjects=new LinkedHashMap<>();
     private final HashMap<String,JSONObject> byChapter=new HashMap<>();
     private final HashMap<String,ArrayList<Integer>> questionsByChapter=new HashMap<>(), cardsByChapter=new HashMap<>();
     private String screen="HOME", currentChapter="", activeSubject="ALL", guideMode="ESSENTIAL";
-    private int pageIndex=0, cardIndex=0, quizIndex=0, quizCorrect=0, quizAnswered=0, cardReviewed=0, boardIndex=0;
+    private int pageIndex=0, cardIndex=0, quizIndex=0, quizCorrect=0, quizAnswered=0, cardReviewed=0, boardIndex=0, shsCorrectionIndex=0;
     private boolean boardRevealed=true;
     private String boardAnswerDraft="";
     private long questionStarted=0L, questionActiveMs=0L;
@@ -88,7 +88,10 @@ public class MainActivity extends Activity {
         return subj==null?1:subj.optInt("coefficient",1);
     }
     private int targetSeconds(JSONObject q){
-        if("QROC".equalsIgnoreCase(s(q,"format")))return 600;
+        if("QROC".equalsIgnoreCase(s(q,"format"))){
+            int authoredTarget=q.optInt("timeTargetSec",0);
+            return authoredTarget>0?authoredTarget:600;
+        }
         JSONObject subj=subjectMetadata(s(q,"subjectId"));
         JSONObject exam=obj(subj,"exam");
         if(exam!=null&&exam.optDouble("approxItems",0)>0&&exam.optDouble("durationMin",0)>0)
@@ -140,6 +143,10 @@ public class MainActivity extends Activity {
                 }
                 corpus=new JSONObject(new String(input,"UTF-8"));indexData();
                 try(InputStream ins=getAssets().open("board_catalog.json");ByteArrayOutputStream out=new ByteArrayOutputStream()){byte[] tmp=new byte[16384];int n;while((n=ins.read(tmp))!=-1)out.write(tmp,0,n);boardCatalog=new JSONObject(new String(out.toByteArray(),"UTF-8"));}
+                try(InputStream ins=getAssets().open("shs_corrections_direct.json");ByteArrayOutputStream out=new ByteArrayOutputStream()){
+                    byte[] tmp=new byte[16384];int n;while((n=ins.read(tmp))!=-1)out.write(tmp,0,n);
+                    shsCorrections=new JSONObject(new String(out.toByteArray(),"UTF-8"));
+                }
                 loadComprehensionGuides();
                 loadFullLessonIndexes();
                 loadExpertComprehension();
@@ -624,17 +631,139 @@ public class MainActivity extends Activity {
                 "Toutes les notions",()->{guideMode="FULL_FACTS";go("LESSON");});
     }
 
+    // Read-only SHS answer keys: deliberately NO QROC submission, score or timer.
+    private void showSHSCorrections(){
+        heading(body,"SHS — corrigés complets en lecture directe");
+        sub(body,"Réponses-types courtes directement consultables ; plans de commentaire présentés séparément. Aucune saisie ni QROC imposé.");
+        JSONObject chaptersObj=obj(shsCorrections,"chapters");
+        if(chaptersObj==null){sub(body,"Corrigés indisponibles : fichier source absent.");return;}
+        ArrayList<JSONObject> eligible=new ArrayList<>();
+        for(JSONObject ch:chapters)if("shs".equals(s(ch,"subjectId"))&&arr(chaptersObj,s(ch,"id"))!=null)eligible.add(ch);
+        if(eligible.isEmpty()){sub(body,"Aucun chapitre SHS indexé.");return;}
+        if(!"shs".equals(s(byChapter.get(currentChapter),"subjectId"))||arr(chaptersObj,currentChapter)==null)
+            currentChapter=s(eligible.get(0),"id");
+        ArrayList<String> names=new ArrayList<>();
+        int selected=0;
+        for(int i=0;i<eligible.size();i++){
+            JSONObject ch=eligible.get(i);
+            names.add(s(ch,"title"));
+            if(currentChapter.equals(s(ch,"id")))selected=i;
+        }
+        Spinner chaptersSelector=new Spinner(this);
+        ArrayAdapter<String> adapter=new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,names);
+        chaptersSelector.setAdapter(adapter);chaptersSelector.setSelection(selected,false);
+        chaptersSelector.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){
+            @Override public void onItemSelected(android.widget.AdapterView<?> parent,View view,int pos,long id){
+                String next=s(eligible.get(pos),"id");
+                if(!next.equals(currentChapter)){currentChapter=next;shsCorrectionIndex=0;go("SHS_CORRECTIONS");}
+            }
+            @Override public void onNothingSelected(android.widget.AdapterView<?> parent){}
+        });
+        add(body,chaptersSelector);
+        JSONArray corrections=arr(chaptersObj,currentChapter);
+        if(corrections==null||corrections.length()==0){sub(body,"Aucun corrigé indexé.");return;}
+        shsCorrectionIndex=Math.min(Math.max(shsCorrectionIndex,0),corrections.length()-1);
+        ArrayList<String> correctionTitles=new ArrayList<>();
+        for(int i=0;i<corrections.length();i++){
+            JSONObject entry=corrections.optJSONObject(i);
+            String title=s(entry,"title");
+            correctionTitles.add((i+1)+". "+(title.length()>100?title.substring(0,100)+"…":title));
+        }
+        Spinner parts=new Spinner(this);
+        parts.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,correctionTitles));
+        parts.setSelection(shsCorrectionIndex,false);
+        parts.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){
+            @Override public void onItemSelected(android.widget.AdapterView<?> parent,View view,int pos,long id){
+                if(pos!=shsCorrectionIndex){shsCorrectionIndex=pos;go("SHS_CORRECTIONS");}
+            }
+            @Override public void onNothingSelected(android.widget.AdapterView<?> parent){}
+        });
+        add(body,parts);
+        buttons(body,"◀ Corrigé précédent",()->{shsCorrectionIndex=Math.max(0,shsCorrectionIndex-1);go("SHS_CORRECTIONS");},
+                "Corrigé suivant ▶",()->{shsCorrectionIndex=Math.min(corrections.length()-1,shsCorrectionIndex+1);go("SHS_CORRECTIONS");});
+        JSONObject entry=corrections.optJSONObject(shsCorrectionIndex);
+        if(entry==null)return;
+        LinearLayout content=panel(body);
+        String kind=s(entry,"kind");
+        if("short-answer".equals(kind)){
+            heading(content,s(entry,"question"));
+            sub(content,"Corrigé de QROC — réponse courte, moins de 8 lignes manuscrites");
+            TextView answer=text(s(entry,"answer"),16,WHITE,false);
+            answer.setTextIsSelectable(true);
+            add(content,answer);
+        }else if("commentary".equals(kind)){
+            heading(content,"Commentaire de texte — plan de correction");
+            sub(content,s(entry,"topic"));
+            heading(content,"Problématique");
+            TextView question=text(s(entry,"problematic"),15,WHITE,false);
+            question.setTextIsSelectable(true);add(content,question);
+            heading(content,"Introduction");
+            TextView intro=text(s(entry,"introduction"),15,WHITE,false);
+            intro.setTextIsSelectable(true);add(content,intro);
+            JSONArray axes=arr(entry,"axes");
+            if(axes!=null)for(int i=0;i<axes.length();i++){
+                JSONObject axis=axes.optJSONObject(i);
+                if(axis==null)continue;
+                heading(content,s(axis,"title"));
+                JSONArray args=arr(axis,"arguments");
+                if(args!=null)for(int j=0;j<args.length();j++){
+                    TextView line=text("• "+args.optString(j,""),15,WHITE,false);
+                    line.setTextIsSelectable(true);add(content,line);
+                }
+            }
+            heading(content,"Conclusion");
+            TextView conclusion=text(s(entry,"conclusion"),15,WHITE,false);
+            conclusion.setTextIsSelectable(true);add(content,conclusion);
+        }else{
+            heading(content,s(entry,"title"));
+            JSONArray points=arr(entry,"expectedPoints");
+            if(points!=null)for(int i=0;i<points.length();i++){
+                String v=points.optString(i,"");
+                if(!v.isEmpty()){
+                    TextView t=text((i+1)+". "+v,15,WHITE,false);
+                    t.setTextIsSelectable(true);
+                    add(content,t);
+                }
+            }
+        }
+        JSONArray pages=arr(entry,"sourcePages");
+        if(pages!=null&&pages.length()>0){
+            int first=pages.optInt(0,1);
+            add(body,button("Voir la page FC originale",false,()->{pageIndex=Math.max(0,first-1);go("PAGES");}));
+        }
+    }
+    // Original approved mindmap images stay primary; 13 missing standalone maps use the
+    // already approved structured source-board fallback, never AI-generated replacements.
+    private void showMapPicker(){
+        heading(body,"Cartes mentales — originales conservées");
+        sub(body,"Images d'origine et branches conservées. Une carte structurée existante est utilisée uniquement lorsqu'aucune image originale n'est enregistrée.");
+        subjectFilters(body,()->go("MAP_PICK"));
+        int count=0;
+        for(JSONObject chapter:chapters){
+            String id=s(chapter,"id"),sub=s(chapter,"subjectId");
+            if(!activeSubject.equals("ALL")&&!activeSubject.equals(sub))continue;
+            JSONObject original=mindmaps==null?null:mindmaps.optJSONObject(id);
+            boolean hasOriginal=original!=null&&!s(original,"path").isEmpty();
+            String title=(hasOriginal?"Carte originale • ":"Carte structurée • ")+s(chapter,"title");
+            add(body,button(title,hasOriginal,()->{currentChapter=id;mapSectionIndex=0;go("MAP");}));
+            count++;
+        }
+        if(count==0)sub(body,"Aucune carte disponible pour le filtre.");
+    }
     private void showQuestionModes(){
         heading(body,"Questions — entraînement concours");
-        sub(body,"QCM A–E et QROC, avec corrections détaillées. Les annales/QE brutes au format PDF ont été retirées de l’application.");
+        sub(body,"QCM A–E rédigés sur les fiches, avec correction par proposition. Les sujets QE et annales servent de modèles, pas de banque à recopier.");
         LinearLayout practice=panel(body);
         heading(practice,"Questions d’entraînement");
-        sub(practice,questions.size()+" questions conservées • cinq propositions et explications pour les QCM, grille de correction pour les QROC.");
+        int newQcmCount=0;for(ArrayList<Integer> list:questionsByChapter.values())newQcmCount+=list.size();
+        sub(practice,newQcmCount+" QCM A–E rédigés et corrigés individuellement à partir des cours. Les questions invalides sont retirées de l'entraînement.");
         add(practice,button("Choisir une matière ou un cours",true,()->go("QUIZ_PICK")));
         LinearLayout learning=panel(body);
         heading(learning,"Réviser les cours");
         sub(learning,"Essentiel, Complet, Comprendre, cartes mentales et flashcards.");
-        buttons(learning,"Cours",()->go("CATALOG"),"Flashcards",()->go("CARD_PICK"));
+        buttons(learning,"Cours",()->go("CATALOG"),"Cartes mentales originales",()->go("MAP_PICK"));
+        add(learning,button("SHS — lire directement les corrections (sans QROC)",true,()->{activeSubject="shs";shsCorrectionIndex=0;go("SHS_CORRECTIONS");}));
+        add(learning,button("Flashcards courtes",false,()->go("CARD_PICK")));
     }
     private void indexData(){
         guides=obj(corpus,"courseGuides");mediaPages=obj(corpus,"coursePages");
@@ -647,12 +776,23 @@ public class MainActivity extends Activity {
         if(qs!=null)for(int i=0;i<qs.length();i++){
             JSONObject q=qs.optJSONObject(i);if(q==null)continue;
             int pos=questions.size();questions.add(q);
-            String id=s(q,"chapterId");questionsByChapter.computeIfAbsent(id,k->new ArrayList<>()).add(pos);
+            String id=s(q,"chapterId");
+            // Keep historical QCM progress and source records intact, but do NOT reassign
+            // questions already practised. Only freshly authored A-E questions are visible.
+            // Do not expose the quarantined generator output or questions already studied.
+            String qid=s(q,"id");
+            if(!"QCM".equalsIgnoreCase(s(q,"format"))||
+                    !(qid.startsWith("curated35:")||qid.startsWith("editorial26:")))continue;
+            questionsByChapter.computeIfAbsent(id,k->new ArrayList<>()).add(pos);
         }
         JSONArray cs=arr(corpus,"flashcards");
         if(cs!=null)for(int i=0;i<cs.length();i++){
             JSONObject c=cs.optJSONObject(i);if(c==null)continue;
             int pos=cards.size();cards.add(c);
+            String status=s(c,"studyCardStatus");
+            // Keep the original card record and spaced-repetition history intact, but
+            // do not ask mechanical questions awaiting an editorial rewrite.
+            if(!status.startsWith("APPROVED"))continue;
             String id=s(c,"chapterId");cardsByChapter.computeIfAbsent(id,k->new ArrayList<>()).add(pos);
         }
     }
@@ -714,6 +854,8 @@ public class MainActivity extends Activity {
             case "BOARDS":showBoards();break;
             case "PAGES":showPages(false);break;
             case "MAP":showConceptMap();break;
+            case "MAP_PICK":showMapPicker();break;
+            case "SHS_CORRECTIONS":showSHSCorrections();break;
             case "MAP_BOARD":showStructuredMap();break;
             case "MAP_IMAGE_DETAIL":showOriginalMapDetail();break;
             case "MAP_DETAIL":showConceptBranch();break;
@@ -729,8 +871,8 @@ public class MainActivity extends Activity {
         root.addView(nav,new LinearLayout.LayoutParams(-1,-2));
     }
     private void addNav(String name,String dest){
-        boolean active=screen.equals(dest)||((screen.equals("LESSON")||screen.equals("PAGES")||screen.equals("MAP")||screen.equals("MAP_BOARD")||screen.equals("MAP_IMAGE_DETAIL")||screen.equals("MAP_DETAIL")||screen.equals("BOARDS"))&&dest.equals("CATALOG"))
-                ||((screen.equals("QUIZ")||screen.equals("QUIZ_PICK"))&&dest.equals("QUESTION_HOME"))||(screen.equals("CARDS")&&dest.equals("CARD_PICK"));
+        boolean active=screen.equals(dest)||((screen.equals("LESSON")||screen.equals("PAGES")||screen.equals("MAP")||screen.equals("MAP_PICK")||screen.equals("MAP_BOARD")||screen.equals("MAP_IMAGE_DETAIL")||screen.equals("MAP_DETAIL")||screen.equals("BOARDS"))&&dest.equals("CATALOG"))
+                ||((screen.equals("QUIZ")||screen.equals("QUIZ_PICK")||screen.equals("SHS_CORRECTIONS"))&&dest.equals("QUESTION_HOME"))||(screen.equals("CARDS")&&dest.equals("CARD_PICK"));
         TextView t=text(name,11,active?BLUE:MUTED,active);t.setGravity(Gravity.CENTER);
         t.setMinHeight(dp(46));t.setBackground(bg(active?PANEL2:PANEL,0,9));t.setOnClickListener(v->go(dest));
         nav.addView(t,new LinearLayout.LayoutParams(0,dp(47),1));
@@ -760,39 +902,14 @@ public class MainActivity extends Activity {
         if(attempted>0)sub(overview,attempted+" questions effectuées • "+correct+" intégralement correctes.");
         info(overview,"Flashcards révisées",reviewed+" / "+cards.size());
         buttons(overview,"Questions concours",()->go("QUESTION_HOME"),"Réviser les cartes",()->go("CARD_PICK"));
-        heading(body,"EXAMEN DU 4 NOVEMBRE — TROIS PRIORITÉS");
-        sub(body,"Première semaine • Deuxième semaine (Partie 1) • Fécondation. Accès direct aux cours, flashcards et QCM A–E corrigés.");
-        String[] urgentIds={"histo_semaine1","histo_semaine2","histo_fecondation"};
-        for(String urgentId:urgentIds){
-            JSONObject chapter=byChapter.get(urgentId);
-            if(chapter==null)continue;
-            LinearLayout focus=panel(body);
-            heading(focus,s(chapter,"title"));
-            JSONArray sourcePages=mediaPages==null?null:mediaPages.optJSONArray(urgentId);
-            int pageCount=sourcePages==null?0:sourcePages.length();
-            int cardCount=cardsByChapter.containsKey(urgentId)?cardsByChapter.get(urgentId).size():0;
-            int qCount=questionsByChapter.containsKey(urgentId)?questionsByChapter.get(urgentId).size():0;
-            sub(focus,pageCount+" pages FC • "+cardCount+" flashcards • "+qCount+" QCM/QROC d'entraînement");
-            buttons(focus,"Comprendre / Cours",()->openLesson(urgentId),
-                    "QCM A–E",()->startQuiz(urgentId));
-            buttons(focus,"Flashcards",()->startCards(urgentId),
-                    "Essentiel / Complet",()->{openLesson(urgentId);guideMode="ESSENTIAL";go("LESSON");});
-        }
-        JSONObject newCourse=byChapter.get("sp_demandes_offres");
-        if(newCourse!=null){
-            heading(body,"NOUVELLE FC — SANTÉ PUBLIQUE");
-            LinearLayout newPanel=panel(body);
-            heading(newPanel,s(newCourse,"title"));
-            sub(newPanel,"23 pages de FC • 258 faits structurés • 22 sections explicatives. Aucun QCM, aucune annale inventés.");
-            buttons(newPanel,"Comprendre",()->openLesson("sp_demandes_offres"),
-                    "Complet",()->{
-                        openLesson("sp_demandes_offres");
-                        guideMode="COMPLETE";completeSourceMode=false;go("LESSON");
-                    });
-            add(newPanel,button("Lire la FC originale",false,()->{
-                openLesson("sp_demandes_offres");pageIndex=0;go("PAGES");
-            }));
-        }
+        heading(body,"NOUVEL EXAMEN — TOUTES LES MATIÈRES");
+        sub(body,"Priorité de mémorisation exhaustive : SHS, histologie–embryologie et biologie cellulaire. Toutes les autres matières et tous les cours restent au programme.");
+        buttons(body,"Tous les cours",()->{activeSubject="ALL";go("CATALOG");},
+                "Questions tous cours",()->{activeSubject="ALL";go("QUIZ_PICK");});
+        buttons(body,"Flashcards tous cours",()->{activeSubject="ALL";go("CARD_PICK");},
+                "Réviser SHS",()->{activeSubject="shs";go("CATALOG");});
+        buttons(body,"Histologie",()->{activeSubject="histo";go("CATALOG");},
+                "Biologie cellulaire",()->{activeSubject="biocell";go("CATALOG");});
         heading(body,"Révisions — cours existants");
         ArrayList<JSONObject> rank=new ArrayList<>(chapters);
         rank.sort((a,b)->Integer.compare(priorityScore(b),priorityScore(a)));
@@ -1591,7 +1708,7 @@ public class MainActivity extends Activity {
     }
     private void showPick(boolean quiz){
         heading(body,quiz?"Choisir les questions":"Choisir les flashcards");
-        sub(body,quiz?"Exercices reconstruits depuis les guides — NON issus d’annales authentifiées.":"Cartes de rappel issues des notes, pas des questions originales d’examen.");
+        sub(body,quiz?"QCM A–E : propositions compréhensibles, corrections indépendantes par option, sans reprendre vos annales/QE.":"Flashcards : questions courtes, sélectionnées après contrôle de la formulation.");
         subjectFilters(body,()->go(quiz?"QUIZ_PICK":"CARD_PICK"));
         ArrayList<Integer> together=new ArrayList<>();
         for(JSONObject ch:chapters)if(activeSubject.equals("ALL")||activeSubject.equals(s(ch,"subjectId"))){
@@ -1730,7 +1847,12 @@ public class MainActivity extends Activity {
         long now=System.currentTimeMillis();
         sessionCards.sort((a,b)->{
             long x=prefs.getLong("cd/"+s(cards.get(a),"id"),0L),y=prefs.getLong("cd/"+s(cards.get(b),"id"),0L);
-            return Long.compare(x,y);
+            int dueCompare=Long.compare(x,y);
+            if(dueCompare!=0)return dueCompare;
+            boolean curatedA=s(cards.get(a),"id").startsWith("curated35fc:")||s(cards.get(a),"id").startsWith("realcard26:");
+            boolean curatedB=s(cards.get(b),"id").startsWith("curated35fc:")||s(cards.get(b),"id").startsWith("realcard26:");
+            if(curatedA!=curatedB)return curatedA?-1:1;
+            return 0;
         });
         if(sessionCards.size()>50)sessionCards.subList(50,sessionCards.size()).clear();
         cardIndex=0;cardReviewed=0;go("CARDS");
@@ -1807,7 +1929,7 @@ public class MainActivity extends Activity {
             grades.addView(line,rowLp);
         }
         add(outer,grades);
-        sub(body,"Une question, un fait, une reponse courte. Noter selon la memoire.");
+        sub(body,"Une question précise par carte. Évaluez votre rappel après avoir révélé la réponse.");
     }
     private void gradeCard(JSONObject c,int choice){
         String id=s(c,"id");int n=prefs.getInt("cr/"+id,0)+1;
@@ -1817,7 +1939,9 @@ public class MainActivity extends Activity {
         cardReviewed++;cardIndex++;go("CARDS");
     }
     @Override public void onBackPressed(){
-        if(screen.equals("QUIZ_PICK"))go("QUESTION_HOME");
+        if(screen.equals("SHS_CORRECTIONS"))go("QUESTION_HOME");
+        else if(screen.equals("MAP_PICK"))go("CATALOG");
+        else if(screen.equals("QUIZ_PICK"))go("QUESTION_HOME");
         else if(screen.equals("QUESTION_HOME"))go("HOME");
         else if(screen.equals("MAP_IMAGE_DETAIL")||screen.equals("MAP_BOARD"))go("MAP");
         else if(screen.equals("LESSON")||screen.equals("BOARDS")||screen.equals("QUIZ_PICK")||screen.equals("CARD_PICK")||screen.equals("CATALOG"))go("HOME");
