@@ -6,8 +6,8 @@ android {
         applicationId 'com.azrazieliz.adaptivestudy'
         minSdk 26
         targetSdk 35
-        versionCode 3362
-        versionName '3.36.2-source-coverage'
+        versionCode 3363
+        versionName '3.36.3-direct-courses'
     }
     buildTypes {
         release {
