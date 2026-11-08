@@ -161,96 +161,71 @@ public class MainActivity extends Activity {
     private int completeSectionIndex=0;
     private boolean completeSourceMode=false;
     private void showCompleteStructuredText(JSONObject guide,JSONArray originalPages,String subject){
-        JSONArray all=arr(guide,"sections");
-        int total=all==null?0:all.length();
-        heading(body,"Complet — cours structuré");
+        JSONArray sections=arr(guide,"sections");
+        int n=sections==null?0:sections.length();
+        int factCount=0;
+        if(sections!=null)for(int i=0;i<n;i++){
+            JSONArray facts=arr(sections.optJSONObject(i),"items");
+            if(facts!=null)factCount+=facts.length();
+        }
+        heading(body,"Complet — toutes les sections");
         LinearLayout summary=panel(body);
-        int facts=0;
-        if(all!=null)for(int i=0;i<all.length();i++){
-            JSONArray rows=arr(all.optJSONObject(i),"items");
-            if(rows!=null)facts+=rows.length();
+        info(summary,"Sections",String.valueOf(n));
+        info(summary,"Notions indexées",String.valueOf(factCount));
+        info(summary,"Pages originales",String.valueOf(originalPages==null?0:originalPages.length()));
+        sub(summary,"Lecture continue de toutes les sections. Les données qui n'ont pas été transcrites restent dans les pages sources.");
+        add(summary,button("Toutes les pages de la FC",true,()->{
+            pageIndex=0;go("PAGES");
+        }));
+        if(n==0){sub(body,"Aucune transcription disponible : ouvrir les pages originales.");return;}
+        final ArrayList<View> anchors=new ArrayList<>();
+        final ArrayList<String> labels=new ArrayList<>();
+        labels.add("Atteindre une section");
+        for(int i=0;i<n;i++){
+            JSONObject section=sections.optJSONObject(i);
+            labels.add((i+1)+" / "+n+" : "+s(section,"title"));
         }
-        info(summary,"Notions disponibles",String.valueOf(facts));
-        info(summary,"Sections",String.valueOf(total));
-        info(summary,"Pages de FC d’origine",String.valueOf(originalPages==null?0:originalPages.length()));
-        sub(summary,"Tous les éléments textuels actuellement indexés sont disponibles ici, sans limite arbitraire de premières pages. Les figures et tableaux d’origine restent accessibles dans Pages. La transcription de toutes les images n’est pas encore certifiée exhaustive.");
-        buttons(summary,"Comprendre : mécanismes",()->{guideMode="UNDERSTAND";go("LESSON");},
-                "Pages originales",()->{completeSourceMode=true;pageIndex=0;go("LESSON");});
-        if(total==0){sub(body,"Aucune section structurée dans ce cours.");return;}
-        completeSectionIndex=Math.max(0,Math.min(completeSectionIndex,total-1));
-        final int current=completeSectionIndex;
-        LinearLayout nav=panel(body);
-        heading(nav,"Section "+(current+1)+" / "+total);
-        buttons(nav,"◀ Section précédente",()->{
-            completeSectionIndex=Math.max(0,current-1);go("LESSON");
-        },"Section suivante ▶",()->{
-            completeSectionIndex=Math.min(total-1,current+1);go("LESSON");
+        Spinner toc=new Spinner(this);
+        toc.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,labels));
+        add(body,toc);
+        toc.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){
+            @Override public void onNothingSelected(android.widget.AdapterView<?> parent){}
+            @Override public void onItemSelected(android.widget.AdapterView<?> parent,View v,int pos,long id){
+                if(pos<1||pos>anchors.size())return;
+                View target=anchors.get(pos-1);
+                scroll.post(()->scroll.smoothScrollTo(0,Math.max(0,target.getTop())));
+            }
         });
-        LinearLayout selector=horizontal();
-        EditText number=new EditText(this);
-        number.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
-        number.setText(String.valueOf(current+1));
-        number.setSingleLine(true);
-        number.setTextColor(WHITE);
-        number.setHint("N° de section");
-        number.setPadding(dp(13),dp(9),dp(13),dp(9));
-        number.setBackground(bg(PANEL2,0,9));
-        selector.addView(number,new LinearLayout.LayoutParams(0,dp(48),1));
-        TextView go=button("Atteindre",true,()->{
-            int next;try{next=Integer.parseInt(number.getText().toString().trim());}
-            catch(Exception e){next=current+1;}
-            completeSectionIndex=Math.max(0,Math.min(total-1,next-1));go("LESSON");
-        });
-        LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(dp(120),dp(48));
-        lp.leftMargin=dp(8);selector.addView(go,lp);add(nav,selector);
-        // One full section of unlimited length, not a fixed number of facts.
-        JSONObject section=all.optJSONObject(current);
-        JSONArray factsArr=arr(section,"items");
-        ArrayList<JSONObject> rows=new ArrayList<>();
-        int minSourcePage=Integer.MAX_VALUE;
-        if(factsArr!=null)for(int i=0;i<factsArr.length();i++){
-            JSONObject item=factsArr.optJSONObject(i);
-            if(item==null)continue;
-            String raw=s(item,"value");
-            if(raw.isEmpty())raw=s(item,"text");
-            if(raw.isEmpty())continue;
-            String lower=raw.toLowerCase(Locale.ROOT);
-            if(lower.contains("page pdf")&&lower.contains("remplac"))continue;
-            if(lower.contains("tableau à insérer"))continue;
-            rows.add(item);
-            int page=item.optInt("page",0);
-            if(page>0)minSourcePage=Math.min(minSourcePage,page);
+        for(int i=0;i<n;i++){
+            JSONObject section=sections.optJSONObject(i);
+            LinearLayout block=vertical();
+            anchors.add(block);add(body,block);
+            sub(block,"SECTION "+(i+1)+" / "+n);
+            if(section==null)continue;
+            JSONArray facts=arr(section,"items");
+            ArrayList<JSONObject> rows=new ArrayList<>();
+            int firstPage=Integer.MAX_VALUE;
+            if(facts!=null)for(int j=0;j<facts.length();j++){
+                JSONObject item=facts.optJSONObject(j);
+                if(item==null)continue;
+                String value=s(item,"value");if(value.isEmpty())value=s(item,"text");
+                if(value.trim().isEmpty()||value.toLowerCase(Locale.ROOT).contains("tableau à insérer"))continue;
+                rows.add(item);
+                int sourcePage=item.optInt("page",0);
+                if(sourcePage>0)firstPage=Math.min(firstPage,sourcePage);
+            }
+            if(rows.isEmpty())sub(block,"Aucune notion transcrite ; consultez la FC originale.");
+            else subjectBoard(block,subject,section,rows);
+            if(firstPage!=Integer.MAX_VALUE){
+                final int p=firstPage-1;
+                add(block,button("Page originale "+firstPage,false,()->{
+                    pageIndex=p;go("PAGES");
+                }));
+            }
         }
-        LinearLayout block=panel(body);
-        heading(block,s(section,"title"));
-        if(minSourcePage!=Integer.MAX_VALUE){
-            final int target=Math.max(0,minSourcePage-1);
-            sub(block,rows.size()+" notions • première page source "+(target+1));
-            add(block,button("Voir la page FC correspondante",false,()->{
-                pageIndex=target;go("PAGES");
-            }));
-        }else sub(block,rows.size()+" notions textuelles");
-        if(rows.isEmpty())sub(block,"Aucune notion textuelle validée dans cette section. Voir les pages originales.");
-        else subjectBoard(block,subject,section,rows);
-        // One-tap table of contents: compact and readable, each chapter section reachable directly.
-        LinearLayout toc=panel(body);
-        heading(toc,"Sommaire du cours");
-        for(int i=0;i<total;i++){
-            int index=i;
-            JSONObject item=all.optJSONObject(i);if(item==null)continue;
-            String label=(i+1)+". "+s(item,"title");
-            JSONArray evidence=arr(item,"items");
-            int n=evidence==null?0:evidence.length();
-            add(toc,button(label+" ("+n+")",index==current,()->{
-                completeSectionIndex=index;go("LESSON");
-            }));
-        }
-        LinearLayout footer=panel(body);
-        buttons(footer,"◀ Précédente",()->{
-            completeSectionIndex=Math.max(0,current-1);go("LESSON");
-        },"Suivante ▶",()->{
-            completeSectionIndex=Math.min(total-1,current+1);go("LESSON");
-        });
+        add(body,button("Pages de la FC : lecture intégrale",true,()->{
+            pageIndex=0;go("PAGES");
+        }));
     }
     private JSONObject essentialSelection,completePageIndex;
     private void loadFullLessonIndexes()throws Exception{
@@ -406,21 +381,28 @@ public class MainActivity extends Activity {
     }
     private void showExpertComprehension(JSONObject course){
         LinearLayout introduction=panel(body);
-        boolean sourceIndexedOnly="SOURCE_INDEXED_FACTS_ONLY__NOT_VERIFIED_EXHAUSTIVE_OR_EXPERT".equals(s(course,"coverageStatus"));
-        boolean publicHealth="sp".equals(s(byChapter.get(currentChapter),"subjectId"))||
-                             "shs".equals(s(byChapter.get(currentChapter),"subjectId"));
-        heading(introduction,sourceIndexedOnly?
-            "Comprendre — tous les faits structurés disponibles":
-            (publicHealth?"Comprendre — raisonnement et déterminants":
-                 "Comprendre en profondeur — structures et mécanismes"));
-        sub(introduction,sourceIndexedOnly?
-             "Reconstitution des données déjà indexées, avec leurs pages sources. La transcription intégrale de toutes les figures, tableaux et interactions de cette FC reste à approfondir ; aucune exhaustivité n’est revendiquée.":
-             "Faits du cours, explications causales et approfondissements distingués ; les valeurs de la FC restent contrôlables sur les pages d’origine.");
         JSONArray sections=arr(course,"sections");
         if(sections==null)return;
-        sub(introduction,sections.length()+" sections scientifiques • détails, mesures, étapes et interactions selon la matière.");
-        add(introduction,button("Voir tous les faits structurés de la FC",false,()->{
-            guideMode="FULL_FACTS";go("LESSON");
+        int explanations=0;
+        for(int i=0;i<sections.length();i++){
+            JSONObject block=sections.optJSONObject(i);
+            if(!s(block,"mechanism").trim().isEmpty())explanations++;
+        }
+        heading(introduction,"Comprendre — explications et mécanismes");
+        JSONObject fullGuide=guides==null?null:guides.optJSONObject(currentChapter);
+        JSONArray allGuideSections=arr(fullGuide,"sections");
+        int fullCount=allGuideSections==null?0:allGuideSections.length();
+        sub(introduction,"Explications rédigées : "+explanations+" / "+sections.length()+
+            " parties présentes ici, sur "+fullCount+" sections du cours structuré.");
+        if(fullCount>sections.length())
+            sub(introduction,"Il manque des parties dans Comprendre : ce mode n'est PAS le cours complet. Les autres pages sont accessibles dans Complet et dans la FC originale.");
+        else if(explanations<sections.length())
+            sub(introduction,"Des parties contiennent seulement des faits indexés, sans explication des mécanismes.");
+        add(introduction,button("Lire l'intégralité du cours structuré",true,()->{
+            guideMode="COMPLETE";completeSourceMode=false;go("LESSON");
+        }));
+        add(introduction,button("Lire toutes les pages originales de la FC",false,()->{
+            pageIndex=0;go("PAGES");
         }));
         final ArrayList<View> positions=new ArrayList<>();
         ArrayList<String> labels=new ArrayList<>();labels.add("Aller directement à une partie…");
@@ -450,19 +432,25 @@ public class MainActivity extends Activity {
             if(sourcePages!=null)for(int j=0;j<sourcePages.length();j++)named.add(String.valueOf(sourcePages.optInt(j)));
             sub(card,"FC d'origine • page(s) "+android.text.TextUtils.join(", ",named));
             JSONArray keywords=arr(block,"keywords");
-            TextView tag=technicalText(s(block,"source"),15,WHITE,keywords);
-            tag.setPadding(dp(5),dp(6),dp(5),dp(10));
-            add(card,text(sourceIndexedOnly?"FAITS TEXTUELS INDEXÉS — SOURCE À VÉRIFIER":
-                                  "FAITS ET DÉTAILS DE LA FC",12,GREEN,true));
-            add(card,tag);
-            String mechanisms=s(block,"mechanism");
+            String mechanisms=s(block,"mechanism").trim();
             if(!mechanisms.isEmpty()){
-                add(card,text(sourceIndexedOnly?
-                    "LIENS ET EXPLICATIONS DÉJÀ DOCUMENTÉS":
-                    "EXPLICATION MÉCANISTIQUE • LIENS ET DÉDUCTIONS",12,BLUE,true));
+                add(card,text("EXPLICATION DU MÉCANISME",12,GREEN,true));
                 TextView explained=technicalText(mechanisms,16,WHITE,keywords);
-                explained.setPadding(dp(5),dp(7),dp(5),dp(12));add(card,explained);
+                explained.setPadding(dp(5),dp(7),dp(5),dp(12));
+                add(card,explained);
+            }else{
+                sub(card,"Explication mécanistique non rédigée pour cette partie. Le texte du cours ne remplace pas une explication.");
             }
+            final TextView sourceFacts=technicalText(s(block,"source"),15,WHITE,keywords);
+            sourceFacts.setTextIsSelectable(true);
+            sourceFacts.setPadding(dp(5),dp(6),dp(5),dp(10));
+            sourceFacts.setVisibility(View.GONE);
+            TextView toggle=button("Afficher les faits indexés de la FC",false,()->{
+                boolean visible=sourceFacts.getVisibility()==View.VISIBLE;
+                sourceFacts.setVisibility(visible?View.GONE:View.VISIBLE);
+            });
+            add(card,toggle);
+            add(card,sourceFacts);
             String advanced=s(block,"advanced");
             if(!advanced.isEmpty()){
                 add(card,text("APPROFONDISSEMENT • DISTINCT DU TEXTE EXIGIBLE DE LA FC",12,MUTED,true));
@@ -767,18 +755,63 @@ public class MainActivity extends Activity {
         add(learning,button("SHS — lire directement les corrections (sans QROC)",true,()->{activeSubject="shs";shsCorrectionIndex=0;go("SHS_CORRECTIONS");}));
         add(learning,button("Flashcards courtes",false,()->go("CARD_PICK")));
     }
+    // Do not advertise unsupported umbrella topics as real FC courses.
+    // Preserve the underlying source records for later admission when a real FC is supplied.
+    private boolean unsupportedCourse(JSONObject chapter){
+        String id=s(chapter,"id");
+        String title=s(chapter,"title");
+        String normalized=java.text.Normalizer.normalize(title,java.text.Normalizer.Form.NFD)
+            .replaceAll("\\p{M}+","").toLowerCase(Locale.ROOT).trim();
+        if("histo_embryo".equals(id)||"biocell_cytosq".equals(id))return true;
+        if(normalized.equals("embryologie")||normalized.equals("cytosquelette")
+            ||normalized.equals("cycle cellulaire"))return true;
+        return false;
+    }
+    private void correctKnownSubjectAssignments(){
+        String biochemistry=null;
+        for(Map.Entry<String,String> e:subjects.entrySet()){
+            String name=java.text.Normalizer.normalize(e.getValue(),
+                java.text.Normalizer.Form.NFD).replaceAll("\\p{M}+","")
+                .toLowerCase(Locale.ROOT);
+            if(name.contains("biochim")){biochemistry=e.getKey();break;}
+        }
+        if(biochemistry==null)return;
+        final String destination=biochemistry;
+        HashSet<String> moved=new HashSet<>();
+        for(JSONObject chapter:chapters){
+            String title=java.text.Normalizer.normalize(s(chapter,"title"),
+                java.text.Normalizer.Form.NFD).replaceAll("\\p{M}+","")
+                .toLowerCase(Locale.ROOT);
+            if(title.contains("reparation")&&title.contains("adn")){
+                try{chapter.put("subjectId",destination);}catch(Exception ignored){}
+                moved.add(s(chapter,"id"));
+            }
+        }
+        if(!moved.isEmpty()){
+            for(JSONObject q:questions)if(moved.contains(s(q,"chapterId")))
+                try{q.put("subjectId",destination);}catch(Exception ignored){}
+            for(JSONObject card:cards)if(moved.contains(s(card,"chapterId")))
+                try{card.put("subjectId",destination);}catch(Exception ignored){}
+        }
+    }
     private void indexData(){
         guides=obj(corpus,"courseGuides");mediaPages=obj(corpus,"coursePages");
         mindmaps=obj(corpus,"mindMaps");courseAssets=obj(corpus,"courseAssets");courseMeta=obj(corpus,"courseMeta");
         JSONArray subj=arr(corpus,"subjects");
         if(subj!=null)for(int i=0;i<subj.length();i++){JSONObject x=subj.optJSONObject(i);if(x!=null)subjects.put(s(x,"id"),s(x,"name"));}
         JSONArray ch=arr(corpus,"chapters");
-        if(ch!=null)for(int i=0;i<ch.length();i++){JSONObject c=ch.optJSONObject(i);if(c!=null){chapters.add(c);byChapter.put(s(c,"id"),c);}}
+        if(ch!=null)for(int i=0;i<ch.length();i++){
+            JSONObject c=ch.optJSONObject(i);
+            if(c!=null&&!unsupportedCourse(c)){
+                chapters.add(c);byChapter.put(s(c,"id"),c);
+            }
+        }
         JSONArray qs=arr(corpus,"questions");
         if(qs!=null)for(int i=0;i<qs.length();i++){
             JSONObject q=qs.optJSONObject(i);if(q==null)continue;
             int pos=questions.size();questions.add(q);
             String id=s(q,"chapterId");
+            if(!byChapter.containsKey(id))continue;
             // Keep historical QCM progress and source records intact, but do NOT reassign
             // questions already practised. Only freshly authored A-E questions are visible.
             // Do not expose the quarantined generator output or questions already studied.
@@ -795,8 +828,11 @@ public class MainActivity extends Activity {
             // Keep the original card record and spaced-repetition history intact, but
             // do not ask mechanical questions awaiting an editorial rewrite.
             if(!status.startsWith("APPROVED"))continue;
-            String id=s(c,"chapterId");cardsByChapter.computeIfAbsent(id,k->new ArrayList<>()).add(pos);
+            String id=s(c,"chapterId");
+            if(!byChapter.containsKey(id))continue;
+            cardsByChapter.computeIfAbsent(id,k->new ArrayList<>()).add(pos);
         }
+        correctKnownSubjectAssignments();
     }
     private GradientDrawable bg(int color,int stroke,int rad){
         GradientDrawable g=new GradientDrawable();g.setColor(color);g.setCornerRadius(dp(rad));
@@ -1171,6 +1207,31 @@ public class MainActivity extends Activity {
         String title=s(section,"title");
         LinearLayout board=panel(parent);
         heading(board,title);
+        JSONArray tableColumns=arr(section,"columns");
+        if("table".equals(s(section,"type"))&&tableColumns!=null&&tableColumns.length()>=2&&chosen.size()>1){
+            LinearLayout tableHeader=horizontal();
+            tableHeader.setPadding(dp(8),dp(10),dp(8),dp(10));
+            tableHeader.setBackground(bg(PANEL2,0,9));
+            TextView h1=text(tableColumns.optString(0,"Notion"),13,BLUE,true);
+            TextView h2=text(tableColumns.optString(1,"Description"),13,GREEN,true);
+            tableHeader.addView(h1,new LinearLayout.LayoutParams(0,-2,0.43f));
+            tableHeader.addView(h2,new LinearLayout.LayoutParams(0,-2,0.57f));
+            add(board,tableHeader);
+            for(int row=0;row<chosen.size();row++){
+                JSONObject it=chosen.get(row);
+                LinearLayout cells=horizontal();cells.setGravity(Gravity.TOP);
+                cells.setPadding(dp(8),dp(9),dp(8),dp(9));
+                cells.setBackground(bg(row%2==0?Color.rgb(27,47,73):PANEL2,0,7));
+                TextView label=text(s(it,"label"),14,BLUE,true);
+                String fact=s(it,"value");if(fact.isEmpty())fact=s(it,"text");
+                TextView detail=text(readableValue(s(it,"label"),fact,subject),14,WHITE,false);
+                detail.setTextIsSelectable(true);
+                cells.addView(label,new LinearLayout.LayoutParams(0,-2,0.43f));
+                cells.addView(detail,new LinearLayout.LayoutParams(0,-2,0.57f));
+                add(board,cells);
+            }
+            return;
+        }
         if("phys".equals(subject)){
             sub(board,"LOIS ET FORMULES");
             int index=0;
@@ -1253,6 +1314,14 @@ public class MainActivity extends Activity {
             add(body,button("Tissus musculaires — source complète Parties 1 et 2 (42 pages)",true,()->{
                 muscleSourcePage=0;go("MUSCLE_FULL_PDF");
             }));
+        }
+        if("shs".equals(subject)){
+            JSONObject correctionChapters=obj(shsCorrections,"chapters");
+            JSONArray examAnswers=arr(correctionChapters,currentChapter);
+            if(examAnswers!=null&&examAnswers.length()>0)
+                add(body,button("SHS — corrections rédigées ("+examAnswers.length()+")",true,()->{
+                    shsCorrectionIndex=0;go("SHS_CORRECTIONS");
+                }));
         }
         if(isMemorySubject(currentChapter)){
             LinearLayout notice=panel(body);
@@ -1584,14 +1653,16 @@ public class MainActivity extends Activity {
             showStructuredMap();
             return;
         }
-        heading(body,"Carte mentale originale — "+chapterTitle(currentChapter));
-        sub(body,"Cartes originales restaurées depuis le projet antérieur, sans remplacement graphique.");
-        add(body,button("Voir les tableaux et relations lisibles",false,()->go("MAP_BOARD")));
-        drawImage(s(mind,"path"));
-        add(body,button("Adapter la carte à la page",true,()->{if(activeMapImage!=null)activeMapImage.fitToPage();}));
+        final String mapPath=s(mind,"path");
+        heading(body,"Carte mentale — "+chapterTitle(currentChapter));
+        sub(body,"Vue de révision : la carte est un support visuel, pas une reproduction certifiée du cours original. Pour lire chaque détail, ouvrez le lecteur agrandi.");
+        buttons(body,"Agrandir et déplacer",()->openFullMapReader(mapPath),
+                "Tableaux lisibles",()->go("MAP_BOARD"));
+        drawImage(mapPath);
         JSONArray branches=arr(mind,"subMaps");
         if(branches!=null&&branches.length()>0){
-            heading(body,"Cartes détaillées");
+            heading(body,"Planches complémentaires");
+            sub(body,"Elles précisent la vue générale sans créer de nouveaux cours.");
             for(int i=0;i<branches.length();i++){
                 JSONObject branch=branches.optJSONObject(i);if(branch==null)continue;
                 int ix=i;
@@ -1600,7 +1671,7 @@ public class MainActivity extends Activity {
                 }));
             }
         }
-        add(body,button("Revenir au cours",true,()->go("LESSON")));
+        add(body,button("Revenir au cours",false,()->go("LESSON")));
     }
     private void showOriginalMapDetail(){
         JSONObject mind=mindmaps==null?null:mindmaps.optJSONObject(currentChapter);
@@ -1608,16 +1679,77 @@ public class MainActivity extends Activity {
         if(branches==null||branches.length()==0){go("MAP");return;}
         mindMapDetailIndex=Math.max(0,Math.min(branches.length()-1,mindMapDetailIndex));
         JSONObject page=branches.optJSONObject(mindMapDetailIndex);
+        if(page==null){go("MAP");return;}
+        final String imagePath=s(page,"path");
         heading(body,s(page,"title"));
-        sub(body,"Carte "+(mindMapDetailIndex+1)+" / "+branches.length()+" — image originale");
+        sub(body,"Planche "+(mindMapDetailIndex+1)+" / "+branches.length());
+        buttons(body,"Agrandir et déplacer",()->openFullMapReader(imagePath),
+                "Tableaux lisibles",()->go("MAP_BOARD"));
+        drawImage(imagePath);
         buttons(body,"◀ Précédente",()->{
             mindMapDetailIndex=Math.max(0,mindMapDetailIndex-1);go("MAP_IMAGE_DETAIL");
         },"Suivante ▶",()->{
             mindMapDetailIndex=Math.min(branches.length()-1,mindMapDetailIndex+1);go("MAP_IMAGE_DETAIL");
         });
-        drawImage(s(page,"path"));
-        add(body,button("Adapter la carte à la page",true,()->{if(activeMapImage!=null)activeMapImage.fitToPage();}));
-        buttons(body,"Toutes les cartes",()->go("MAP"),"Liste textuelle",()->go("MAP_BOARD"));
+        add(body,button("Carte générale",false,()->go("MAP")));
+    }
+
+    // The embedded preview deliberately stays fitted to the course page.
+    // This separate reader keeps the source bitmap, supplies explicit zoom,
+    // and allows one-finger panning without squeezing details into the preview.
+    private void openFullMapReader(String path){
+        if(path==null||path.isEmpty())return;
+        final android.app.Dialog dialog=new android.app.Dialog(
+                this,android.R.style.Theme_Black_NoTitleBar_Fullscreen);
+        final LinearLayout stage=vertical();
+        stage.setBackgroundColor(BG);
+        stage.setPadding(dp(10),dp(28),dp(10),dp(18));
+        final TextView status=text("Lecture agrandie • pincer et déplacer pour explorer la carte",15,WHITE,true);
+        add(stage,status);
+        final ZoomImageView viewer=new ZoomImageView(this);
+        viewer.setBackgroundColor(PANEL);
+        LinearLayout.LayoutParams imageLayout=new LinearLayout.LayoutParams(-1,0,1f);
+        imageLayout.topMargin=dp(8);
+        imageLayout.bottomMargin=dp(10);
+        stage.addView(viewer,imageLayout);
+        buttons(stage,"Agrandir +",()->viewer.zoomBy(1.8f),
+                "Réduire −",()->viewer.zoomBy(1f/1.8f));
+        buttons(stage,"Adapter à l'écran",()->viewer.fitToPage(),
+                "Fermer",()->dialog.dismiss());
+        dialog.setContentView(stage);
+        dialog.show();
+        if(dialog.getWindow()!=null)
+            dialog.getWindow().setLayout(ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT);
+        new Thread(()->{
+            try{
+                BitmapFactory.Options options=new BitmapFactory.Options();
+                options.inJustDecodeBounds=true;
+                try(InputStream dims=media(path)){
+                    BitmapFactory.decodeStream(dims,null,options);
+                }
+                int sample=1;
+                while(options.outWidth/sample>5600||options.outHeight/sample>5600)sample*=2;
+                options.inJustDecodeBounds=false;
+                options.inSampleSize=sample;
+                options.inPreferredConfig=Bitmap.Config.RGB_565;
+                final Bitmap bitmap;
+                try(InputStream source=media(path)){
+                    bitmap=BitmapFactory.decodeStream(source,null,options);
+                }
+                if(bitmap==null)throw new IOException("Carte indisponible");
+                runOnUiThread(()->{
+                    if(dialog.isShowing()){
+                        viewer.load(bitmap);
+                        status.setText("Carte agrandie • zoom et déplacement actifs");
+                    }else bitmap.recycle();
+                });
+            }catch(Exception error){
+                runOnUiThread(()->{
+                    if(dialog.isShowing())status.setText("Carte indisponible : vérifier l'image source");
+                });
+            }
+        },"MapReader").start();
     }
 
     private void showStructuredMap(){
@@ -2028,7 +2160,7 @@ public class MainActivity extends Activity {
     private final class ZoomImageView extends androidxPlaceholderImageView {
         private final Matrix matrix=new Matrix();
         private final ScaleGestureDetector detector;
-        private float scale=1f,min=1f,max=5f;
+        private float scale=1f,min=1f,max=12f;
         private float lastX,lastY;
         private boolean dragging=false;
         private Bitmap bitmap;
@@ -2046,6 +2178,13 @@ public class MainActivity extends Activity {
             if(old!=null&&old!=b&&!old.isRecycled())old.recycle();
             post(this::fitToPage);
         }
+        void zoomBy(float requestedFactor){
+            if(bitmap==null||bitmap.isRecycled()||getWidth()==0||getHeight()==0)return;
+            float factor=Math.min(max/scale,Math.max(min/scale,requestedFactor));
+            scale*=factor;
+            matrix.postScale(factor,factor,getWidth()/2f,getHeight()/2f);
+            setImageMatrix(matrix);
+        }
         void fitToPage(){
             Bitmap b=bitmap;
             if(b==null||b.isRecycled()||getWidth()==0||getHeight()==0)return;
@@ -2062,7 +2201,8 @@ public class MainActivity extends Activity {
         @Override public boolean onTouchEvent(MotionEvent ev){
             detector.onTouchEvent(ev);
             switch(ev.getActionMasked()){
-                case MotionEvent.ACTION_DOWN:lastX=ev.getX();lastY=ev.getY();dragging=true;getParent().requestDisallowInterceptTouchEvent(true);return true;
+                case MotionEvent.ACTION_DOWN:lastX=ev.getX();lastY=ev.getY();dragging=true;getParent().requestDisallowInterceptTouchEvent(scale>1.01f);return true;
+                case MotionEvent.ACTION_POINTER_DOWN:getParent().requestDisallowInterceptTouchEvent(true);return true;
                 case MotionEvent.ACTION_MOVE:
                     if(dragging&&!detector.isInProgress()&&ev.getPointerCount()==1){
                         float dx=ev.getX()-lastX,dy=ev.getY()-lastY;
