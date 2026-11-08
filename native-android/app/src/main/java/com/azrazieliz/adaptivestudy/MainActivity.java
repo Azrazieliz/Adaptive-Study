@@ -1584,14 +1584,16 @@ public class MainActivity extends Activity {
             showStructuredMap();
             return;
         }
-        heading(body,"Carte mentale originale — "+chapterTitle(currentChapter));
-        sub(body,"Cartes originales restaurées depuis le projet antérieur, sans remplacement graphique.");
-        add(body,button("Voir les tableaux et relations lisibles",false,()->go("MAP_BOARD")));
-        drawImage(s(mind,"path"));
-        add(body,button("Adapter la carte à la page",true,()->{if(activeMapImage!=null)activeMapImage.fitToPage();}));
+        final String mapPath=s(mind,"path");
+        heading(body,"Carte mentale — "+chapterTitle(currentChapter));
+        sub(body,"Vue de révision : la carte est un support visuel, pas une reproduction certifiée du cours original. Pour lire chaque détail, ouvrez le lecteur agrandi.");
+        buttons(body,"Agrandir et déplacer",()->openFullMapReader(mapPath),
+                "Tableaux lisibles",()->go("MAP_BOARD"));
+        drawImage(mapPath);
         JSONArray branches=arr(mind,"subMaps");
         if(branches!=null&&branches.length()>0){
-            heading(body,"Cartes détaillées");
+            heading(body,"Planches complémentaires");
+            sub(body,"Elles précisent la vue générale sans créer de nouveaux cours.");
             for(int i=0;i<branches.length();i++){
                 JSONObject branch=branches.optJSONObject(i);if(branch==null)continue;
                 int ix=i;
@@ -1600,7 +1602,7 @@ public class MainActivity extends Activity {
                 }));
             }
         }
-        add(body,button("Revenir au cours",true,()->go("LESSON")));
+        add(body,button("Revenir au cours",false,()->go("LESSON")));
     }
     private void showOriginalMapDetail(){
         JSONObject mind=mindmaps==null?null:mindmaps.optJSONObject(currentChapter);
@@ -1608,16 +1610,77 @@ public class MainActivity extends Activity {
         if(branches==null||branches.length()==0){go("MAP");return;}
         mindMapDetailIndex=Math.max(0,Math.min(branches.length()-1,mindMapDetailIndex));
         JSONObject page=branches.optJSONObject(mindMapDetailIndex);
+        if(page==null){go("MAP");return;}
+        final String imagePath=s(page,"path");
         heading(body,s(page,"title"));
-        sub(body,"Carte "+(mindMapDetailIndex+1)+" / "+branches.length()+" — image originale");
+        sub(body,"Planche "+(mindMapDetailIndex+1)+" / "+branches.length());
+        buttons(body,"Agrandir et déplacer",()->openFullMapReader(imagePath),
+                "Tableaux lisibles",()->go("MAP_BOARD"));
+        drawImage(imagePath);
         buttons(body,"◀ Précédente",()->{
             mindMapDetailIndex=Math.max(0,mindMapDetailIndex-1);go("MAP_IMAGE_DETAIL");
         },"Suivante ▶",()->{
             mindMapDetailIndex=Math.min(branches.length()-1,mindMapDetailIndex+1);go("MAP_IMAGE_DETAIL");
         });
-        drawImage(s(page,"path"));
-        add(body,button("Adapter la carte à la page",true,()->{if(activeMapImage!=null)activeMapImage.fitToPage();}));
-        buttons(body,"Toutes les cartes",()->go("MAP"),"Liste textuelle",()->go("MAP_BOARD"));
+        add(body,button("Carte générale",false,()->go("MAP")));
+    }
+
+    // The embedded preview deliberately stays fitted to the course page.
+    // This separate reader keeps the source bitmap, supplies explicit zoom,
+    // and allows one-finger panning without squeezing details into the preview.
+    private void openFullMapReader(String path){
+        if(path==null||path.isEmpty())return;
+        final android.app.Dialog dialog=new android.app.Dialog(
+                this,android.R.style.Theme_Black_NoTitleBar_Fullscreen);
+        final LinearLayout stage=vertical();
+        stage.setBackgroundColor(BG);
+        stage.setPadding(dp(10),dp(28),dp(10),dp(18));
+        final TextView status=text("Lecture agrandie • pincer et déplacer pour explorer la carte",15,WHITE,true);
+        add(stage,status);
+        final ZoomImageView viewer=new ZoomImageView(this);
+        viewer.setBackgroundColor(PANEL);
+        LinearLayout.LayoutParams imageLayout=new LinearLayout.LayoutParams(-1,0,1f);
+        imageLayout.topMargin=dp(8);
+        imageLayout.bottomMargin=dp(10);
+        stage.addView(viewer,imageLayout);
+        buttons(stage,"Agrandir +",()->viewer.zoomBy(1.8f),
+                "Réduire −",()->viewer.zoomBy(1f/1.8f));
+        buttons(stage,"Adapter à l'écran",()->viewer.fitToPage(),
+                "Fermer",()->dialog.dismiss());
+        dialog.setContentView(stage);
+        dialog.show();
+        if(dialog.getWindow()!=null)
+            dialog.getWindow().setLayout(ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT);
+        new Thread(()->{
+            try{
+                BitmapFactory.Options options=new BitmapFactory.Options();
+                options.inJustDecodeBounds=true;
+                try(InputStream dims=media(path)){
+                    BitmapFactory.decodeStream(dims,null,options);
+                }
+                int sample=1;
+                while(options.outWidth/sample>5600||options.outHeight/sample>5600)sample*=2;
+                options.inJustDecodeBounds=false;
+                options.inSampleSize=sample;
+                options.inPreferredConfig=Bitmap.Config.RGB_565;
+                final Bitmap bitmap;
+                try(InputStream source=media(path)){
+                    bitmap=BitmapFactory.decodeStream(source,null,options);
+                }
+                if(bitmap==null)throw new IOException("Carte indisponible");
+                runOnUiThread(()->{
+                    if(dialog.isShowing()){
+                        viewer.load(bitmap);
+                        status.setText("Carte agrandie • zoom et déplacement actifs");
+                    }else bitmap.recycle();
+                });
+            }catch(Exception error){
+                runOnUiThread(()->{
+                    if(dialog.isShowing())status.setText("Carte indisponible : vérifier l'image source");
+                });
+            }
+        },"MapReader").start();
     }
 
     private void showStructuredMap(){
@@ -2028,7 +2091,7 @@ public class MainActivity extends Activity {
     private final class ZoomImageView extends androidxPlaceholderImageView {
         private final Matrix matrix=new Matrix();
         private final ScaleGestureDetector detector;
-        private float scale=1f,min=1f,max=5f;
+        private float scale=1f,min=1f,max=12f;
         private float lastX,lastY;
         private boolean dragging=false;
         private Bitmap bitmap;
@@ -2046,6 +2109,13 @@ public class MainActivity extends Activity {
             if(old!=null&&old!=b&&!old.isRecycled())old.recycle();
             post(this::fitToPage);
         }
+        void zoomBy(float requestedFactor){
+            if(bitmap==null||bitmap.isRecycled()||getWidth()==0||getHeight()==0)return;
+            float factor=Math.min(max/scale,Math.max(min/scale,requestedFactor));
+            scale*=factor;
+            matrix.postScale(factor,factor,getWidth()/2f,getHeight()/2f);
+            setImageMatrix(matrix);
+        }
         void fitToPage(){
             Bitmap b=bitmap;
             if(b==null||b.isRecycled()||getWidth()==0||getHeight()==0)return;
@@ -2062,7 +2132,8 @@ public class MainActivity extends Activity {
         @Override public boolean onTouchEvent(MotionEvent ev){
             detector.onTouchEvent(ev);
             switch(ev.getActionMasked()){
-                case MotionEvent.ACTION_DOWN:lastX=ev.getX();lastY=ev.getY();dragging=true;getParent().requestDisallowInterceptTouchEvent(true);return true;
+                case MotionEvent.ACTION_DOWN:lastX=ev.getX();lastY=ev.getY();dragging=true;getParent().requestDisallowInterceptTouchEvent(scale>1.01f);return true;
+                case MotionEvent.ACTION_POINTER_DOWN:getParent().requestDisallowInterceptTouchEvent(true);return true;
                 case MotionEvent.ACTION_MOVE:
                     if(dragging&&!detector.isInProgress()&&ev.getPointerCount()==1){
                         float dx=ev.getX()-lastX,dy=ev.getY()-lastY;
