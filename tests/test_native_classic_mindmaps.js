@@ -21,7 +21,7 @@ const image=section("private void drawImageInto(LinearLayout target,String path)
 assert.match(image,/new ZoomImageView\(this\)/);
 assert.doesNotMatch(image,/imageHeight|displayWidth|Math\.min\(dp\(850\)/,"Do not force map preview aspect/height");
 
-const zoom=section("private final class ZoomImageView", "private final class androidxPlaceholderImageView");
+const zoom=section("private final class ZoomImageView", "private static class androidxPlaceholderImageView");
 assert.match(zoom,/ScaleGestureDetector/,"Pinch-to-zoom handler must remain");
 assert.match(zoom,/detector\.onTouchEvent\(ev\)/,"Pinch detector must receive touch events");
 assert.match(zoom,/matrix\.postTranslate\(dx,dy\)/,"Drag panning must remain");
