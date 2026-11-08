@@ -45,7 +45,6 @@ public class MainActivity extends Activity {
         "histo_embryo","biocell_cytosq","biocell_mec_integrine","biocell_dev","biocell_cycle"));
     private boolean shsPractice;
     private JSONObject sourceRepairs;
-    private final HashMap<String,float[]> mapViewports=new HashMap<>();
     private String screen="HOME", currentChapter="", activeSubject="ALL", guideMode="ESSENTIAL";
     private int muscleSourcePage=0;
     private static final String MUSCLE_FULL_SOURCE="assets/new-course-source/histo_muscles1/fc-1.pdf";
@@ -1737,114 +1736,26 @@ public class MainActivity extends Activity {
     private int mindMapDetailIndex=0;
     private void showConceptMap(){
         JSONObject mind=mindmaps==null?null:mindmaps.optJSONObject(currentChapter);
-        JSONObject authored=obj(obj(sourceRepairs,currentChapter),"map");
-        JSONArray branches=arr(authored,"branches");
+        if(mind==null||s(mind,"path").isEmpty()){
+            showStructuredMap();
+            return;
+        }
+        heading(body,"Carte mentale originale — "+chapterTitle(currentChapter));
+        sub(body,"Cartes originales restaurées depuis le projet antérieur, sans remplacement graphique.");
+        add(body,button("Voir les tableaux et relations lisibles",false,()->go("MAP_BOARD")));
+        drawImage(s(mind,"path"));
+        JSONArray branches=arr(mind,"subMaps");
         if(branches!=null&&branches.length()>0){
-            showAuthoredMap(authored,branches,mind);
-            return;
-        }
-        if(s(mind,"path").isEmpty()){
-            heading(body,chapterTitle(currentChapter));
-            sub(body,"Carte de cours non rédigée.");
-            buttons(body,"Index des notions",()->go("MAP_BOARD"),
-                    "Pages de la FC",()->{pageIndex=0;go("PAGES");});
-            return;
-        }
-        final String mapPath=s(mind,"path");
-        heading(body,chapterTitle(currentChapter));
-        sub(body,"Planche conservée");
-        buttons(body,"Plein écran",()->openFullMapReader(mapPath),
-                "Tableaux lisibles",()->go("MAP_BOARD"));
-        drawImage(mapPath);
-        showPreservedMapPlates(mind);
-        add(body,button("Revenir au cours",false,()->go("LESSON")));
-    }
-    private void showAuthoredMap(JSONObject authored,JSONArray branches,JSONObject original){
-        String kind=s(authored,"kind");
-        boolean sequence="timeline".equals(kind)||"pathway".equals(kind);
-        int railColor="timeline".equals(kind)?GOLD:"pathway".equals(kind)?GREEN:BLUE;
-        String title=s(authored,"title");
-        heading(body,title.isEmpty()?chapterTitle(currentChapter):title);
-        for(int i=0;i<branches.length();i++){
-            JSONObject branch=branches.optJSONObject(i);
-            if(branch==null||s(branch,"title").isEmpty())continue;
-            LinearLayout row=horizontal();
-            row.setGravity(Gravity.TOP);
-            row.addView(new MapRail(sequence,i==branches.length()-1,railColor),
-                    new LinearLayout.LayoutParams(dp(38),-1));
-            LinearLayout card=vertical();
-            card.setPadding(dp(10),0,dp(10),dp(8));
-            card.setBackground(bg(PANEL,railColor,12));
-            row.addView(card,new LinearLayout.LayoutParams(0,-2,1));
-            LinearLayout detail=vertical();
-            String explanation=s(branch,"detail");
-            String label=(sequence?(i+1)+". ":"")+s(branch,"title");
-            TextView toggle=text(label+"  ▾",15,railColor,true);
-            toggle.setGravity(Gravity.START|Gravity.CENTER_VERTICAL);
-            toggle.setMinHeight(dp(47));
-            toggle.setPadding(dp(8),dp(8),dp(8),dp(8));
-            toggle.setBackground(bg(PANEL2,0,8));
-            toggle.setOnClickListener(view->{
-                boolean expand=detail.getVisibility()==View.GONE;
-                detail.setVisibility(expand?View.VISIBLE:View.GONE);
-                toggle.setText(label+(expand?"  ▴":"  ▾"));
-            });
-            add(card,toggle);
-            String relation=s(branch,"relation");
-            if(!relation.isEmpty())add(card,text(relation,14,railColor,true));
-            if(!explanation.isEmpty()){
-                TextView prose=text(explanation,15,WHITE,false);
-                prose.setTextIsSelectable(true);
-                add(detail,prose);
-            }
-            JSONArray pages=arr(branch,"pages");
-            if(pages!=null)sourcePageLinks(detail,pages);
-            detail.setVisibility(View.GONE);
-            card.addView(detail,new LinearLayout.LayoutParams(-1,-2));
-            body.addView(row,new LinearLayout.LayoutParams(-1,-2));
-        }
-        String path=s(original,"path");
-        if(!path.isEmpty())add(body,button("Consulter la planche conservée",false,()->openFullMapReader(path)));
-        showPreservedMapPlates(original);
-        add(body,button("Revenir au cours",false,()->go("LESSON")));
-    }
-    private void showPreservedMapPlates(JSONObject original){
-        JSONArray plates=arr(original,"subMaps");
-        if(plates==null||plates.length()==0)return;
-        heading(body,"Planches complémentaires conservées");
-        for(int i=0;i<plates.length();i++){
-            JSONObject plate=plates.optJSONObject(i);
-            if(s(plate,"path").isEmpty())continue;
-            int index=i;
-            add(body,button((i+1)+". "+s(plate,"title"),false,()->{
-                mindMapDetailIndex=index;go("MAP_IMAGE_DETAIL");
-            }));
-        }
-    }
-    private final class MapRail extends View {
-        private final android.graphics.Paint line=new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
-        private final boolean sequence,last;
-        MapRail(boolean sequence,boolean last,int color){
-            super(MainActivity.this);
-            this.sequence=sequence;
-            this.last=last;
-            line.setColor(color);
-            line.setStrokeWidth(dp(2));
-            line.setStrokeCap(android.graphics.Paint.Cap.ROUND);
-            setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-        }
-        @Override protected void onDraw(android.graphics.Canvas canvas){
-            super.onDraw(canvas);
-            float x=dp(15), y=dp(24);
-            canvas.drawLine(x,0,x,last?y:getHeight(),line);
-            canvas.drawLine(x,y,getWidth(),y,line);
-            canvas.drawCircle(x,y,dp(5),line);
-            if(sequence&&!last&&getHeight()>y+dp(14)){
-                float arrow=getHeight()-dp(6);
-                canvas.drawLine(x-dp(4),arrow-dp(4),x,arrow,line);
-                canvas.drawLine(x+dp(4),arrow-dp(4),x,arrow,line);
+            heading(body,"Cartes détaillées");
+            for(int i=0;i<branches.length();i++){
+                JSONObject branch=branches.optJSONObject(i);if(branch==null)continue;
+                int ix=i;
+                add(body,button((i+1)+". "+s(branch,"title"),false,()->{
+                    mindMapDetailIndex=ix;go("MAP_IMAGE_DETAIL");
+                }));
             }
         }
+        add(body,button("Revenir au cours",true,()->go("LESSON")));
     }
     private void showOriginalMapDetail(){
         JSONObject mind=mindmaps==null?null:mindmaps.optJSONObject(currentChapter);
@@ -1852,82 +1763,15 @@ public class MainActivity extends Activity {
         if(branches==null||branches.length()==0){go("MAP");return;}
         mindMapDetailIndex=Math.max(0,Math.min(branches.length()-1,mindMapDetailIndex));
         JSONObject page=branches.optJSONObject(mindMapDetailIndex);
-        if(page==null){go("MAP");return;}
-        final String imagePath=s(page,"path");
         heading(body,s(page,"title"));
-        sub(body,"Planche "+(mindMapDetailIndex+1)+" / "+branches.length());
-        buttons(body,"Plein écran",()->openFullMapReader(imagePath),
-                "Tableaux lisibles",()->go("MAP_BOARD"));
-        drawImage(imagePath);
+        sub(body,"Carte "+(mindMapDetailIndex+1)+" / "+branches.length()+" — image originale");
         buttons(body,"◀ Précédente",()->{
             mindMapDetailIndex=Math.max(0,mindMapDetailIndex-1);go("MAP_IMAGE_DETAIL");
         },"Suivante ▶",()->{
             mindMapDetailIndex=Math.min(branches.length()-1,mindMapDetailIndex+1);go("MAP_IMAGE_DETAIL");
         });
-        add(body,button("Carte générale",false,()->go("MAP")));
-    }
-
-    // The embedded preview deliberately stays fitted to the course page.
-    // This separate reader keeps the source bitmap, supplies explicit zoom,
-    // and allows one-finger panning without squeezing details into the preview.
-    private void openFullMapReader(String path){
-        if(path==null||path.isEmpty())return;
-        final android.app.Dialog dialog=new android.app.Dialog(
-                this,android.R.style.Theme_Black_NoTitleBar_Fullscreen);
-        final LinearLayout stage=vertical();
-        stage.setBackgroundColor(BG);
-        stage.setPadding(dp(8),dp(8),dp(8),dp(10));
-        final TextView status=text("Chargement de la carte…",14,MUTED,false);
-        add(stage,status);
-        final ZoomImageView viewer=new ZoomImageView(this);
-        viewer.setBackgroundColor(PANEL);
-        LinearLayout.LayoutParams imageLayout=new LinearLayout.LayoutParams(-1,0,1f);
-        imageLayout.topMargin=dp(8);
-        imageLayout.bottomMargin=dp(10);
-        stage.addView(viewer,imageLayout);
-        buttons(stage,"Agrandir +",()->viewer.zoomBy(1.8f),
-                "Réduire −",()->viewer.zoomBy(1f/1.8f));
-        buttons(stage,"Carte entière",viewer::fitToPage,"Pleine largeur",viewer::fitToWidth);
-        add(stage,button("Fermer",false,dialog::dismiss));
-        dialog.setOnDismissListener(ignored->{
-            float[] viewport=viewer.viewport(viewer.getWidth(),viewer.getHeight());
-            if(viewport!=null)mapViewports.put(path,viewport);
-        });
-        dialog.setContentView(stage);
-        dialog.show();
-        if(dialog.getWindow()!=null)
-            dialog.getWindow().setLayout(ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.MATCH_PARENT);
-        new Thread(()->{
-            try{
-                BitmapFactory.Options options=new BitmapFactory.Options();
-                options.inJustDecodeBounds=true;
-                try(InputStream dims=media(path)){
-                    BitmapFactory.decodeStream(dims,null,options);
-                }
-                int sample=1;
-                while(options.outWidth/sample>5600||options.outHeight/sample>5600)sample*=2;
-                options.inJustDecodeBounds=false;
-                options.inSampleSize=sample;
-                options.inPreferredConfig=Bitmap.Config.RGB_565;
-                final Bitmap bitmap;
-                try(InputStream source=media(path)){
-                    bitmap=BitmapFactory.decodeStream(source,null,options);
-                }
-                if(bitmap==null)throw new IOException("Carte indisponible");
-                runOnUiThread(()->{
-                    if(dialog.isShowing()){
-                        status.setVisibility(View.GONE);
-                        viewer.load(bitmap);
-                        viewer.post(()->viewer.restoreViewport(mapViewports.get(path)));
-                    }else bitmap.recycle();
-                });
-            }catch(Exception error){
-                runOnUiThread(()->{
-                    if(dialog.isShowing())status.setText("Carte indisponible : vérifier l'image source");
-                });
-            }
-        },"MapReader").start();
+        drawImage(s(page,"path"));
+        buttons(body,"Toutes les cartes",()->go("MAP"),"Liste textuelle",()->go("MAP_BOARD"));
     }
 
     private void showStructuredMap(){
@@ -2050,13 +1894,6 @@ public class MainActivity extends Activity {
                 if(b==null)throw new IOException("Image absente");
                 runOnUiThread(()->{
                     if(!path.equals(image.getTag())){b.recycle();return;}
-                    if(screen.equals("MAP")||screen.equals("MAP_IMAGE_DETAIL")){
-                        int displayWidth=Math.max(dp(220),getResources().getDisplayMetrics().widthPixels-dp(48));
-                        int imageHeight=Math.round(displayWidth*(float)b.getHeight()/Math.max(1,b.getWidth()));
-                        imageHeight=Math.max(dp(150),Math.min(dp(850),imageHeight));
-                        LinearLayout.LayoutParams fitted=(LinearLayout.LayoutParams)image.getLayoutParams();
-                        fitted.height=imageHeight;image.setLayoutParams(fitted);
-                    }
                     image.load(b);
                 });
             }catch(Exception e){runOnUiThread(()->sub(target,"Image indisponible : "+path));}
