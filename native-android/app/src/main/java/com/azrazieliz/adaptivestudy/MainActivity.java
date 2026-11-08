@@ -389,8 +389,15 @@ public class MainActivity extends Activity {
             if(!s(block,"mechanism").trim().isEmpty())explanations++;
         }
         heading(introduction,"Comprendre — explications et mécanismes");
+        JSONObject fullGuide=guides==null?null:guides.optJSONObject(currentChapter);
+        JSONArray allGuideSections=arr(fullGuide,"sections");
+        int fullCount=allGuideSections==null?0:allGuideSections.length();
         sub(introduction,"Explications rédigées : "+explanations+" / "+sections.length()+
-            " parties. Les autres parties contiennent des faits vérifiables dans la FC, mais pas encore d'explication mécanistique validée.");
+            " parties présentes ici, sur "+fullCount+" sections du cours structuré.");
+        if(fullCount>sections.length())
+            sub(introduction,"Il manque des parties dans Comprendre : ce mode n'est PAS le cours complet. Les autres pages sont accessibles dans Complet et dans la FC originale.");
+        else if(explanations<sections.length())
+            sub(introduction,"Des parties contiennent seulement des faits indexés, sans explication des mécanismes.");
         add(introduction,button("Lire l'intégralité du cours structuré",true,()->{
             guideMode="COMPLETE";completeSourceMode=false;go("LESSON");
         }));
