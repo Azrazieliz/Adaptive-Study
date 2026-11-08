@@ -381,21 +381,21 @@ public class MainActivity extends Activity {
     }
     private void showExpertComprehension(JSONObject course){
         LinearLayout introduction=panel(body);
-        boolean sourceIndexedOnly="SOURCE_INDEXED_FACTS_ONLY__NOT_VERIFIED_EXHAUSTIVE_OR_EXPERT".equals(s(course,"coverageStatus"));
-        boolean publicHealth="sp".equals(s(byChapter.get(currentChapter),"subjectId"))||
-                             "shs".equals(s(byChapter.get(currentChapter),"subjectId"));
-        heading(introduction,sourceIndexedOnly?
-            "Comprendre — tous les faits structurés disponibles":
-            (publicHealth?"Comprendre — raisonnement et déterminants":
-                 "Comprendre en profondeur — structures et mécanismes"));
-        sub(introduction,sourceIndexedOnly?
-             "Reconstitution des données déjà indexées, avec leurs pages sources. La transcription intégrale de toutes les figures, tableaux et interactions de cette FC reste à approfondir ; aucune exhaustivité n’est revendiquée.":
-             "Faits du cours, explications causales et approfondissements distingués ; les valeurs de la FC restent contrôlables sur les pages d’origine.");
         JSONArray sections=arr(course,"sections");
         if(sections==null)return;
-        sub(introduction,sections.length()+" sections scientifiques • détails, mesures, étapes et interactions selon la matière.");
-        add(introduction,button("Voir tous les faits structurés de la FC",false,()->{
-            guideMode="FULL_FACTS";go("LESSON");
+        int explanations=0;
+        for(int i=0;i<sections.length();i++){
+            JSONObject block=sections.optJSONObject(i);
+            if(!s(block,"mechanism").trim().isEmpty())explanations++;
+        }
+        heading(introduction,"Comprendre — explications et mécanismes");
+        sub(introduction,"Explications rédigées : "+explanations+" / "+sections.length()+
+            " parties. Les autres parties contiennent des faits vérifiables dans la FC, mais pas encore d'explication mécanistique validée.");
+        add(introduction,button("Lire l'intégralité du cours structuré",true,()->{
+            guideMode="COMPLETE";completeSourceMode=false;go("LESSON");
+        }));
+        add(introduction,button("Lire toutes les pages originales de la FC",false,()->{
+            pageIndex=0;go("PAGES");
         }));
         final ArrayList<View> positions=new ArrayList<>();
         ArrayList<String> labels=new ArrayList<>();labels.add("Aller directement à une partie…");
@@ -425,19 +425,25 @@ public class MainActivity extends Activity {
             if(sourcePages!=null)for(int j=0;j<sourcePages.length();j++)named.add(String.valueOf(sourcePages.optInt(j)));
             sub(card,"FC d'origine • page(s) "+android.text.TextUtils.join(", ",named));
             JSONArray keywords=arr(block,"keywords");
-            TextView tag=technicalText(s(block,"source"),15,WHITE,keywords);
-            tag.setPadding(dp(5),dp(6),dp(5),dp(10));
-            add(card,text(sourceIndexedOnly?"FAITS TEXTUELS INDEXÉS — SOURCE À VÉRIFIER":
-                                  "FAITS ET DÉTAILS DE LA FC",12,GREEN,true));
-            add(card,tag);
-            String mechanisms=s(block,"mechanism");
+            String mechanisms=s(block,"mechanism").trim();
             if(!mechanisms.isEmpty()){
-                add(card,text(sourceIndexedOnly?
-                    "LIENS ET EXPLICATIONS DÉJÀ DOCUMENTÉS":
-                    "EXPLICATION MÉCANISTIQUE • LIENS ET DÉDUCTIONS",12,BLUE,true));
+                add(card,text("EXPLICATION DU MÉCANISME",12,GREEN,true));
                 TextView explained=technicalText(mechanisms,16,WHITE,keywords);
-                explained.setPadding(dp(5),dp(7),dp(5),dp(12));add(card,explained);
+                explained.setPadding(dp(5),dp(7),dp(5),dp(12));
+                add(card,explained);
+            }else{
+                sub(card,"Explication mécanistique non rédigée pour cette partie. Le texte du cours ne remplace pas une explication.");
             }
+            final TextView sourceFacts=technicalText(s(block,"source"),15,WHITE,keywords);
+            sourceFacts.setTextIsSelectable(true);
+            sourceFacts.setPadding(dp(5),dp(6),dp(5),dp(10));
+            sourceFacts.setVisibility(View.GONE);
+            TextView toggle=button("Afficher les faits indexés de la FC",false,()->{
+                boolean visible=sourceFacts.getVisibility()==View.VISIBLE;
+                sourceFacts.setVisibility(visible?View.GONE:View.VISIBLE);
+            });
+            add(card,toggle);
+            add(card,sourceFacts);
             String advanced=s(block,"advanced");
             if(!advanced.isEmpty()){
                 add(card,text("APPROFONDISSEMENT • DISTINCT DU TEXTE EXIGIBLE DE LA FC",12,MUTED,true));
