@@ -161,96 +161,71 @@ public class MainActivity extends Activity {
     private int completeSectionIndex=0;
     private boolean completeSourceMode=false;
     private void showCompleteStructuredText(JSONObject guide,JSONArray originalPages,String subject){
-        JSONArray all=arr(guide,"sections");
-        int total=all==null?0:all.length();
-        heading(body,"Complet — cours structuré");
+        JSONArray sections=arr(guide,"sections");
+        int n=sections==null?0:sections.length();
+        int factCount=0;
+        if(sections!=null)for(int i=0;i<n;i++){
+            JSONArray facts=arr(sections.optJSONObject(i),"items");
+            if(facts!=null)factCount+=facts.length();
+        }
+        heading(body,"Complet — toutes les sections");
         LinearLayout summary=panel(body);
-        int facts=0;
-        if(all!=null)for(int i=0;i<all.length();i++){
-            JSONArray rows=arr(all.optJSONObject(i),"items");
-            if(rows!=null)facts+=rows.length();
+        info(summary,"Sections",String.valueOf(n));
+        info(summary,"Notions indexées",String.valueOf(factCount));
+        info(summary,"Pages originales",String.valueOf(originalPages==null?0:originalPages.length()));
+        sub(summary,"Lecture continue de toutes les sections. Les données qui n'ont pas été transcrites restent dans les pages sources.");
+        add(summary,button("Toutes les pages de la FC",true,()->{
+            pageIndex=0;go("PAGES");
+        }));
+        if(n==0){sub(body,"Aucune transcription disponible : ouvrir les pages originales.");return;}
+        final ArrayList<View> anchors=new ArrayList<>();
+        final ArrayList<String> labels=new ArrayList<>();
+        labels.add("Atteindre une section");
+        for(int i=0;i<n;i++){
+            JSONObject section=sections.optJSONObject(i);
+            labels.add((i+1)+" / "+n+" : "+s(section,"title"));
         }
-        info(summary,"Notions disponibles",String.valueOf(facts));
-        info(summary,"Sections",String.valueOf(total));
-        info(summary,"Pages de FC d’origine",String.valueOf(originalPages==null?0:originalPages.length()));
-        sub(summary,"Tous les éléments textuels actuellement indexés sont disponibles ici, sans limite arbitraire de premières pages. Les figures et tableaux d’origine restent accessibles dans Pages. La transcription de toutes les images n’est pas encore certifiée exhaustive.");
-        buttons(summary,"Comprendre : mécanismes",()->{guideMode="UNDERSTAND";go("LESSON");},
-                "Pages originales",()->{completeSourceMode=true;pageIndex=0;go("LESSON");});
-        if(total==0){sub(body,"Aucune section structurée dans ce cours.");return;}
-        completeSectionIndex=Math.max(0,Math.min(completeSectionIndex,total-1));
-        final int current=completeSectionIndex;
-        LinearLayout nav=panel(body);
-        heading(nav,"Section "+(current+1)+" / "+total);
-        buttons(nav,"◀ Section précédente",()->{
-            completeSectionIndex=Math.max(0,current-1);go("LESSON");
-        },"Section suivante ▶",()->{
-            completeSectionIndex=Math.min(total-1,current+1);go("LESSON");
+        Spinner toc=new Spinner(this);
+        toc.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,labels));
+        add(body,toc);
+        toc.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){
+            @Override public void onNothingSelected(android.widget.AdapterView<?> parent){}
+            @Override public void onItemSelected(android.widget.AdapterView<?> parent,View v,int pos,long id){
+                if(pos<1||pos>anchors.size())return;
+                View target=anchors.get(pos-1);
+                scroll.post(()->scroll.smoothScrollTo(0,Math.max(0,target.getTop())));
+            }
         });
-        LinearLayout selector=horizontal();
-        EditText number=new EditText(this);
-        number.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
-        number.setText(String.valueOf(current+1));
-        number.setSingleLine(true);
-        number.setTextColor(WHITE);
-        number.setHint("N° de section");
-        number.setPadding(dp(13),dp(9),dp(13),dp(9));
-        number.setBackground(bg(PANEL2,0,9));
-        selector.addView(number,new LinearLayout.LayoutParams(0,dp(48),1));
-        TextView go=button("Atteindre",true,()->{
-            int next;try{next=Integer.parseInt(number.getText().toString().trim());}
-            catch(Exception e){next=current+1;}
-            completeSectionIndex=Math.max(0,Math.min(total-1,next-1));go("LESSON");
-        });
-        LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(dp(120),dp(48));
-        lp.leftMargin=dp(8);selector.addView(go,lp);add(nav,selector);
-        // One full section of unlimited length, not a fixed number of facts.
-        JSONObject section=all.optJSONObject(current);
-        JSONArray factsArr=arr(section,"items");
-        ArrayList<JSONObject> rows=new ArrayList<>();
-        int minSourcePage=Integer.MAX_VALUE;
-        if(factsArr!=null)for(int i=0;i<factsArr.length();i++){
-            JSONObject item=factsArr.optJSONObject(i);
-            if(item==null)continue;
-            String raw=s(item,"value");
-            if(raw.isEmpty())raw=s(item,"text");
-            if(raw.isEmpty())continue;
-            String lower=raw.toLowerCase(Locale.ROOT);
-            if(lower.contains("page pdf")&&lower.contains("remplac"))continue;
-            if(lower.contains("tableau à insérer"))continue;
-            rows.add(item);
-            int page=item.optInt("page",0);
-            if(page>0)minSourcePage=Math.min(minSourcePage,page);
+        for(int i=0;i<n;i++){
+            JSONObject section=sections.optJSONObject(i);
+            LinearLayout block=vertical();
+            anchors.add(block);add(body,block);
+            sub(block,"SECTION "+(i+1)+" / "+n);
+            if(section==null)continue;
+            JSONArray facts=arr(section,"items");
+            ArrayList<JSONObject> rows=new ArrayList<>();
+            int firstPage=Integer.MAX_VALUE;
+            if(facts!=null)for(int j=0;j<facts.length();j++){
+                JSONObject item=facts.optJSONObject(j);
+                if(item==null)continue;
+                String value=s(item,"value");if(value.isEmpty())value=s(item,"text");
+                if(value.trim().isEmpty()||value.toLowerCase(Locale.ROOT).contains("tableau à insérer"))continue;
+                rows.add(item);
+                int sourcePage=item.optInt("page",0);
+                if(sourcePage>0)firstPage=Math.min(firstPage,sourcePage);
+            }
+            if(rows.isEmpty())sub(block,"Aucune notion transcrite ; consultez la FC originale.");
+            else subjectBoard(block,subject,section,rows);
+            if(firstPage!=Integer.MAX_VALUE){
+                final int p=firstPage-1;
+                add(block,button("Page originale "+firstPage,false,()->{
+                    pageIndex=p;go("PAGES");
+                }));
+            }
         }
-        LinearLayout block=panel(body);
-        heading(block,s(section,"title"));
-        if(minSourcePage!=Integer.MAX_VALUE){
-            final int target=Math.max(0,minSourcePage-1);
-            sub(block,rows.size()+" notions • première page source "+(target+1));
-            add(block,button("Voir la page FC correspondante",false,()->{
-                pageIndex=target;go("PAGES");
-            }));
-        }else sub(block,rows.size()+" notions textuelles");
-        if(rows.isEmpty())sub(block,"Aucune notion textuelle validée dans cette section. Voir les pages originales.");
-        else subjectBoard(block,subject,section,rows);
-        // One-tap table of contents: compact and readable, each chapter section reachable directly.
-        LinearLayout toc=panel(body);
-        heading(toc,"Sommaire du cours");
-        for(int i=0;i<total;i++){
-            int index=i;
-            JSONObject item=all.optJSONObject(i);if(item==null)continue;
-            String label=(i+1)+". "+s(item,"title");
-            JSONArray evidence=arr(item,"items");
-            int n=evidence==null?0:evidence.length();
-            add(toc,button(label+" ("+n+")",index==current,()->{
-                completeSectionIndex=index;go("LESSON");
-            }));
-        }
-        LinearLayout footer=panel(body);
-        buttons(footer,"◀ Précédente",()->{
-            completeSectionIndex=Math.max(0,current-1);go("LESSON");
-        },"Suivante ▶",()->{
-            completeSectionIndex=Math.min(total-1,current+1);go("LESSON");
-        });
+        add(body,button("Pages de la FC : lecture intégrale",true,()->{
+            pageIndex=0;go("PAGES");
+        }));
     }
     private JSONObject essentialSelection,completePageIndex;
     private void loadFullLessonIndexes()throws Exception{
@@ -1171,6 +1146,31 @@ public class MainActivity extends Activity {
         String title=s(section,"title");
         LinearLayout board=panel(parent);
         heading(board,title);
+        JSONArray tableColumns=arr(section,"columns");
+        if("table".equals(s(section,"type"))&&tableColumns!=null&&tableColumns.length()>=2&&chosen.size()>1){
+            LinearLayout tableHeader=horizontal();
+            tableHeader.setPadding(dp(8),dp(10),dp(8),dp(10));
+            tableHeader.setBackground(bg(PANEL2,0,9));
+            TextView h1=text(tableColumns.optString(0,"Notion"),13,BLUE,true);
+            TextView h2=text(tableColumns.optString(1,"Description"),13,GREEN,true);
+            tableHeader.addView(h1,new LinearLayout.LayoutParams(0,-2,0.43f));
+            tableHeader.addView(h2,new LinearLayout.LayoutParams(0,-2,0.57f));
+            add(board,tableHeader);
+            for(int row=0;row<chosen.size();row++){
+                JSONObject it=chosen.get(row);
+                LinearLayout cells=horizontal();cells.setGravity(Gravity.TOP);
+                cells.setPadding(dp(8),dp(9),dp(8),dp(9));
+                cells.setBackground(bg(row%2==0?Color.rgb(27,47,73):PANEL2,0,7));
+                TextView label=text(s(it,"label"),14,BLUE,true);
+                String fact=s(it,"value");if(fact.isEmpty())fact=s(it,"text");
+                TextView detail=text(readableValue(s(it,"label"),fact,subject),14,WHITE,false);
+                detail.setTextIsSelectable(true);
+                cells.addView(label,new LinearLayout.LayoutParams(0,-2,0.43f));
+                cells.addView(detail,new LinearLayout.LayoutParams(0,-2,0.57f));
+                add(board,cells);
+            }
+            return;
+        }
         if("phys".equals(subject)){
             sub(board,"LOIS ET FORMULES");
             int index=0;
@@ -1253,6 +1253,14 @@ public class MainActivity extends Activity {
             add(body,button("Tissus musculaires — source complète Parties 1 et 2 (42 pages)",true,()->{
                 muscleSourcePage=0;go("MUSCLE_FULL_PDF");
             }));
+        }
+        if("shs".equals(subject)){
+            JSONObject correctionChapters=obj(shsCorrections,"chapters");
+            JSONArray examAnswers=arr(correctionChapters,currentChapter);
+            if(examAnswers!=null&&examAnswers.length()>0)
+                add(body,button("SHS — corrections rédigées ("+examAnswers.length()+")",true,()->{
+                    shsCorrectionIndex=0;go("SHS_CORRECTIONS");
+                }));
         }
         if(isMemorySubject(currentChapter)){
             LinearLayout notice=panel(body);
