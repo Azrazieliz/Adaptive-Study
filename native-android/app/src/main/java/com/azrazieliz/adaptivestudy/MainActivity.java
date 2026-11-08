@@ -742,18 +742,63 @@ public class MainActivity extends Activity {
         add(learning,button("SHS — lire directement les corrections (sans QROC)",true,()->{activeSubject="shs";shsCorrectionIndex=0;go("SHS_CORRECTIONS");}));
         add(learning,button("Flashcards courtes",false,()->go("CARD_PICK")));
     }
+    // Do not advertise unsupported umbrella topics as real FC courses.
+    // Preserve the underlying source records for later admission when a real FC is supplied.
+    private boolean unsupportedCourse(JSONObject chapter){
+        String id=s(chapter,"id");
+        String title=s(chapter,"title");
+        String normalized=java.text.Normalizer.normalize(title,java.text.Normalizer.Form.NFD)
+            .replaceAll("\\p{M}+","").toLowerCase(Locale.ROOT).trim();
+        if("histo_embryo".equals(id)||"biocell_cytosq".equals(id))return true;
+        if(normalized.equals("embryologie")||normalized.equals("cytosquelette")
+            ||normalized.equals("cycle cellulaire"))return true;
+        return false;
+    }
+    private void correctKnownSubjectAssignments(){
+        String biochemistry=null;
+        for(Map.Entry<String,String> e:subjects.entrySet()){
+            String name=java.text.Normalizer.normalize(e.getValue(),
+                java.text.Normalizer.Form.NFD).replaceAll("\\p{M}+","")
+                .toLowerCase(Locale.ROOT);
+            if(name.contains("biochim")){biochemistry=e.getKey();break;}
+        }
+        if(biochemistry==null)return;
+        final String destination=biochemistry;
+        HashSet<String> moved=new HashSet<>();
+        for(JSONObject chapter:chapters){
+            String title=java.text.Normalizer.normalize(s(chapter,"title"),
+                java.text.Normalizer.Form.NFD).replaceAll("\\p{M}+","")
+                .toLowerCase(Locale.ROOT);
+            if(title.contains("reparation")&&title.contains("adn")){
+                try{chapter.put("subjectId",destination);}catch(Exception ignored){}
+                moved.add(s(chapter,"id"));
+            }
+        }
+        if(!moved.isEmpty()){
+            for(JSONObject q:questions)if(moved.contains(s(q,"chapterId")))
+                try{q.put("subjectId",destination);}catch(Exception ignored){}
+            for(JSONObject card:cards)if(moved.contains(s(card,"chapterId")))
+                try{card.put("subjectId",destination);}catch(Exception ignored){}
+        }
+    }
     private void indexData(){
         guides=obj(corpus,"courseGuides");mediaPages=obj(corpus,"coursePages");
         mindmaps=obj(corpus,"mindMaps");courseAssets=obj(corpus,"courseAssets");courseMeta=obj(corpus,"courseMeta");
         JSONArray subj=arr(corpus,"subjects");
         if(subj!=null)for(int i=0;i<subj.length();i++){JSONObject x=subj.optJSONObject(i);if(x!=null)subjects.put(s(x,"id"),s(x,"name"));}
         JSONArray ch=arr(corpus,"chapters");
-        if(ch!=null)for(int i=0;i<ch.length();i++){JSONObject c=ch.optJSONObject(i);if(c!=null){chapters.add(c);byChapter.put(s(c,"id"),c);}}
+        if(ch!=null)for(int i=0;i<ch.length();i++){
+            JSONObject c=ch.optJSONObject(i);
+            if(c!=null&&!unsupportedCourse(c)){
+                chapters.add(c);byChapter.put(s(c,"id"),c);
+            }
+        }
         JSONArray qs=arr(corpus,"questions");
         if(qs!=null)for(int i=0;i<qs.length();i++){
             JSONObject q=qs.optJSONObject(i);if(q==null)continue;
             int pos=questions.size();questions.add(q);
             String id=s(q,"chapterId");
+            if(!byChapter.containsKey(id))continue;
             // Keep historical QCM progress and source records intact, but do NOT reassign
             // questions already practised. Only freshly authored A-E questions are visible.
             // Do not expose the quarantined generator output or questions already studied.
@@ -770,8 +815,11 @@ public class MainActivity extends Activity {
             // Keep the original card record and spaced-repetition history intact, but
             // do not ask mechanical questions awaiting an editorial rewrite.
             if(!status.startsWith("APPROVED"))continue;
-            String id=s(c,"chapterId");cardsByChapter.computeIfAbsent(id,k->new ArrayList<>()).add(pos);
+            String id=s(c,"chapterId");
+            if(!byChapter.containsKey(id))continue;
+            cardsByChapter.computeIfAbsent(id,k->new ArrayList<>()).add(pos);
         }
+        correctKnownSubjectAssignments();
     }
     private GradientDrawable bg(int color,int stroke,int rad){
         GradientDrawable g=new GradientDrawable();g.setColor(color);g.setCornerRadius(dp(rad));
