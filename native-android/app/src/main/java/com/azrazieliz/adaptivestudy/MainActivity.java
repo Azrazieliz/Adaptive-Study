@@ -36,7 +36,7 @@ public class MainActivity extends Activity {
     private LinearLayout root, body, nav, titleBar;
     private ScrollView scroll;
     private SharedPreferences prefs;
-    private JSONObject corpus, guides, mediaPages, mindmaps, courseAssets, courseMeta, boardCatalog, shsCorrections;
+    private JSONObject corpus, guides, mediaPages, mindmaps, courseAssets, courseMeta, boardCatalog, shsCorrections, academicVisualCourses;
     private final ArrayList<JSONObject> chapters=new ArrayList<>(), questions=new ArrayList<>(), cards=new ArrayList<>();
     private final LinkedHashMap<String,String> subjects=new LinkedHashMap<>();
     private final HashMap<String,JSONObject> byChapter=new HashMap<>();
@@ -157,6 +157,7 @@ public class MainActivity extends Activity {
                 loadFullLessonIndexes();
                 loadExpertComprehension();
                 loadSourceRepairs();
+                loadAcademicVisuals();
                 runOnUiThread(this::render);
             }catch(Exception e){
                 runOnUiThread(()->{root.removeAllViews();TextView err=text("Impossible de charger les cours hors ligne : "+e,16,RED,false);root.addView(err);});
@@ -272,6 +273,124 @@ public class MainActivity extends Activity {
             }
         }
         add(body,button("Revenir à Complet",false,()->go("LESSON")));
+    }
+
+
+    /** Visuals are curated course annotations, not mind maps or generated summaries.
+     * Academic data stays in a separate private asset; existing study_data.json is immutable.
+     */
+    private void loadAcademicVisuals() throws Exception {
+        try {
+            JSONObject source=readJsonAsset("academic_visuals_verified_20261112.json");
+            if(!"NATIVE_FC_VISUAL_BOARDS_V1".equals(s(source,"schema")))
+                throw new IOException("Schémas : format non reconnu");
+            academicVisualCourses=obj(source,"courses");
+        }catch(FileNotFoundException absent){
+            academicVisualCourses=null; // Existing installs remain compatible.
+        }
+    }
+    private int visualAccent(int index){
+        int[] palette={Color.rgb(72,218,210),Color.rgb(151,171,255),
+                       Color.rgb(255,193,108),Color.rgb(128,226,164)};
+        return palette[index%palette.length];
+    }
+    private void drawAcademicVisualCard(LinearLayout holder,String name,String detail,
+                                        int accent,int sourcePage){
+        LinearLayout card=vertical();
+        card.setPadding(dp(11),dp(10),dp(11),dp(10));
+        card.setBackground(bg(PANEL2,accent,12));
+        add(card,text(name,15,accent,true));
+        if(!detail.isEmpty()){
+            TextView value=text(detail,14,WHITE,false);
+            value.setLineSpacing(dp(2),1.02f);
+            add(card,value);
+        }
+        if(sourcePage>0)add(card,text("FC • p. "+sourcePage,11,MUTED,false));
+        add(holder,card);
+    }
+    /** Compact native flow, feedback loop or side-by-side comparison.
+     * Only content explicitly authored and page-linked in the original FC is eligible.
+     */
+    private void renderAcademicVisuals(String mode){
+        if(academicVisualCourses==null)return;
+        JSONArray boards=arr(academicVisualCourses,currentChapter);
+        if(boards==null)return;
+        for(int i=0;i<boards.length();i++){
+            JSONObject visual=boards.optJSONObject(i);
+            if(visual==null)continue;
+            // Never render draft OCR or an unreviewed/unsupported source illustration.
+            if(!"PAGE_IMAGE_REVIEWED".equals(s(visual,"reviewStatus")))continue;
+            JSONArray modes=arr(visual,"modes");
+            boolean enabled=false;
+            if(modes!=null)for(int k=0;k<modes.length();k++)
+                if(mode.equals(modes.optString(k)))enabled=true;
+            if(!enabled)continue;
+            JSONArray sourcePages=arr(visual,"sourcePages");
+            if(sourcePages==null||sourcePages.length()==0)continue;
+            String layout=s(visual,"layout");
+            if(!"flow".equals(layout)&&!"comparison".equals(layout)&&!"cycle".equals(layout))
+                continue;
+            LinearLayout section=panel(body);
+            TextView tag=text("REPÈRE VISUEL • FC",12,GREEN,true);
+            add(section,tag);
+            heading(section,s(visual,"title"));
+            String subtitle=s(visual,"subtitle");
+            if(!subtitle.isEmpty())add(section,text(subtitle,13,MUTED,false));
+            if("comparison".equals(layout)){
+                JSONArray columns=arr(visual,"columns");
+                if(columns==null||columns.length()!=2)continue;
+                LinearLayout across=horizontal();
+                across.setGravity(Gravity.TOP);
+                for(int j=0;j<2;j++){
+                    JSONObject column=columns.optJSONObject(j);
+                    if(column==null)continue;
+                    LinearLayout side=vertical();
+                    int accent=visualAccent(j);
+                    side.setPadding(dp(9),dp(10),dp(9),dp(10));
+                    side.setBackground(bg(PANEL2,accent,12));
+                    add(side,text(s(column,"name"),15,accent,true));
+                    JSONArray points=arr(column,"points");
+                    if(points!=null)for(int z=0;z<points.length();z++){
+                        String item=points.optString(z,"");
+                        if(!item.isEmpty())add(side,text("• "+item,13,WHITE,false));
+                    }
+                    LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,-2,1);
+                    if(j==0)lp.rightMargin=dp(7);
+                    across.addView(side,lp);
+                }
+                add(section,across);
+            }else{
+                JSONArray steps=arr(visual,"steps");
+                if(steps==null||steps.length()<2||steps.length()>6)continue;
+                for(int j=0;j<steps.length();j++){
+                    JSONObject step=steps.optJSONObject(j);
+                    if(step==null)continue;
+                    drawAcademicVisualCard(section,s(step,"label"),s(step,"detail"),
+                        visualAccent(j),step.optInt("page",0));
+                    if(j<steps.length()-1){
+                        TextView connector=text("↓",21,GREEN,true);
+                        connector.setGravity(Gravity.CENTER);
+                        connector.setPadding(0,dp(2),0,dp(2));
+                        add(section,connector);
+                    }
+                }
+                if("cycle".equals(layout)){
+                    TextView feedback=text("↺  Effet de retour sur la première étape",12,GOLD,true);
+                    feedback.setGravity(Gravity.CENTER);
+                    add(section,feedback);
+                }
+            }
+            String deduction=s(visual,"deduction");
+            if("UNDERSTAND".equals(mode)&&!deduction.isEmpty()){
+                LinearLayout answer=vertical();
+                answer.setPadding(dp(11),dp(9),dp(11),dp(9));
+                answer.setBackground(bg(Color.rgb(17,58,67),GREEN,12));
+                add(answer,text("À DÉDUIRE AU CONCOURS",11,GREEN,true));
+                add(answer,text(deduction,14,WHITE,false));
+                add(section,answer);
+            }
+            sourcePageLinks(section,sourcePages);
+        }
     }
 
     private JSONObject essentialSelection,completePageIndex;
@@ -1390,6 +1509,7 @@ public class MainActivity extends Activity {
         showLessonTabs();
         heading(body,s(chapter,"title"));
         if(!"COMPLETE".equals(guideMode))showCourseReferenceLinks();
+        renderAcademicVisuals(guideMode);
         if("UNDERSTAND".equals(guideMode)){showComprehension();return;}
         JSONObject guide=guides==null?null:guides.optJSONObject(currentChapter);
         JSONArray sections=arr(guide,"sections");
