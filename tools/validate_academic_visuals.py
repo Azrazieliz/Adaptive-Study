@@ -8,13 +8,14 @@ This tool never rewrites source course files or the visual pack.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import sys
 import zipfile
 from collections import Counter
 from pathlib import Path
 
-ALLOWED_LAYOUTS = {"flow", "cycle", "comparison"}
+ALLOWED_LAYOUTS = {"flow", "cycle", "comparison", "source_figure"}
 ALLOWED_MODES = {"ESSENTIAL", "COMPLETE", "UNDERSTAND"}
 ALLOWED_STATES = {"FC_OCR_CROSSCHECKED_PENDING_IMAGE", "PAGE_IMAGE_REVIEWED"}
 INVENTED_COURSE_IDS = {
@@ -30,7 +31,7 @@ def curriculum(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def validate(pack: dict, academic: dict) -> dict:
+def validate(pack: dict, academic: dict, source_apk: Path | None = None) -> dict:
     failures, warnings = [], []
     if pack.get("schema") != "NATIVE_FC_VISUAL_BOARDS_V1":
         failures.append("Unknown visual-board schema")
@@ -88,6 +89,39 @@ def validate(pack: dict, academic: dict) -> dict:
                     failures.append(f"{cid}:{bid}: reviewed state lacks original-page proof")
                 elif set(proof["reviewedPageNumbers"]) != set(source_pages):
                     failures.append(f"{cid}:{bid}: not all cited pages image-reviewed")
+            if layout == "source_figure":
+                source_page = board.get("sourcePage")
+                source_image = board.get("sourceImage")
+                if (not isinstance(source_page, int) or
+                    not 1 <= source_page <= len(registered_pages) or
+                    registered_pages[source_page-1] != source_image or
+                    source_pages != [source_page]):
+                    failures.append(f"{cid}:{bid}: figure does not match registered original page")
+                crop = board.get("crop")
+                if (not isinstance(crop, list) or len(crop) != 4 or
+                    any(not isinstance(n, (int,float)) or isinstance(n,bool) for n in crop) or
+                    not (0 <= crop[0] < crop[2] <= 1 and
+                         0 <= crop[1] < crop[3] <= 1) or
+                    crop[2]-crop[0] <= 0.1 or crop[3]-crop[1] <= 0.06):
+                    failures.append(f"{cid}:{bid}: invalid normalized figure crop")
+                markers = board.get("recognition")
+                if (not isinstance(markers, list) or not 1 <= len(markers) <= 8 or
+                    any(not isinstance(m, dict) or not m.get("label") or
+                            not m.get("value") or len(m["value"]) > 240
+                            for m in markers)):
+                    failures.append(f"{cid}:{bid}: missing/overlong identification criteria")
+                if status == "PAGE_IMAGE_REVIEWED":
+                    if source_apk is None:
+                        failures.append(f"{cid}:{bid}: original APK required to verify figure hash")
+                    else:
+                        try:
+                            with zipfile.ZipFile(source_apk) as apk:
+                                raw = apk.read("assets/www/" + source_image)
+                            expected = hashlib.sha256(raw).hexdigest()
+                            if board.get("reviewEvidence",{}).get("sourceImageSha256") != expected:
+                                failures.append(f"{cid}:{bid}: original figure checksum mismatch")
+                        except (OSError, KeyError, TypeError, zipfile.BadZipFile):
+                            failures.append(f"{cid}:{bid}: original image absent from source APK")
             if layout in {"flow", "cycle"}:
                 steps = board.get("steps")
                 if not isinstance(steps, list) or not 2 <= len(steps) <= 6:
@@ -133,11 +167,13 @@ def main() -> int:
     parser.add_argument("--visuals", required=True)
     parser.add_argument("--curriculum", required=True)
     parser.add_argument("--report")
+    parser.add_argument("--source-apk", help="Existing source APK for verified figure hashes")
     args = parser.parse_args()
     try:
         result = validate(
             json.loads(Path(args.visuals).read_text(encoding="utf-8")),
             curriculum(Path(args.curriculum)),
+            Path(args.source_apk) if args.source_apk else None,
         )
     except (OSError, ValueError, KeyError, zipfile.BadZipFile) as exc:
         result = {"valid_structure": False, "release_approved": False,
