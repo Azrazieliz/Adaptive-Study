@@ -98,3 +98,31 @@ Private report `PRESERVATION_20261112_NO_APK_BUILD\ACADEMIC_GAP_76_REAL_COURSES_
 Highest current gaps by absolute count: `bio_biomol` (62/83), `biocell_noyau` (40/50), `biocell_endo` (31/34), `sp_facteurs_env` (28/30), `biocell_endocytose_exocytose` (26/33), `sp_produits_sante` (22/32), `histo_fecondation` (19/22), `biocell_mito_perox` (17/21). Empty text-index page may be a cover, illustration, title or genuine content deficit; original source must be visually read before altering or claiming completeness. A page with one or more indexed facts is **not** a certified complete FC page.
 
 This establishes the actual academic reconstruction priority before visual polish, major adaptive additions, or any new APK release.
+
+## 12 November — histology figure source population (current checkpoint)
+
+**Owner-approved formats:** original histological figures, annotated source-image identification, concise comparison boards and deduction-focused mechanisms. No anatomy course is being added; the subject is **Histology**. Old rejected mind maps are not restored.
+
+**Original FC visual inventory, no regeneration:** `tools/inspect_histology_source_figures.py` inspected the **330 source pages across the 12 genuine histology courses** inside the existing signed v3.36.9 APK, with **zero absent page-image files**. It ranked candidate source figures and saved four private contact sheets to `PRIVATE_ACADEMIC_VISUALS_20261112\HISTO_SOURCE_REVIEW`. Heuristic rank only; original diagrams were then inspected visually rather than automatically certified.
+
+**Implemented actual original-FC image crop renderer:** [MainActivity.java](https://github.com/Azrazieliz/Adaptive-Study/blob/work/controlled-recovery-incremental-20261112/native-android/app/src/main/java/com/azrazieliz/adaptivestudy/MainActivity.java) handles `source_figure`: verifies that the path matches a registered course FC page, requires source-review evidence, crops the real original page to the relevant schema, renders it in a pinch-to-zoom native image view and offers compact revealable identification criteria with original-page links. No giant viewer control panel, no extra standalone image download, no web app. The code was **successfully compiled by Android API 36.1 javac**, exit 0, following the new figure-mode implementation (ordinary module-path/deprecation compiler warnings only).
+
+**Private academic content added to native working assets:** `D:\AdaptiveStudyRecovery\AdaptiveStudyNative\app\src\main\assets\academic_visuals_verified_20261112.json`, SHA-256 `c3f1dcf55b7e630229fcf0e895ede3ffca1411060eb1da191b62b1c54a5ec185`. The file provides **17 visually source-reviewed, original teacher-FC figure boards across all 12 genuine histology courses**, precisely:
+- `histo_epitheliaux` — 3: basal membrane layers, electron micrograph, simple/stratified/pseudostratified tissue images.
+- `histo_conjonctifs` — 2: collagen coloration and ultrastructural fibers.
+- `histo_cartilage` — 1: perichondrium layers and chondroblasts.
+- `histo_osseux` — 2: osteon schematic and microscope identification.
+- `histo_muscles1` — 1: striated skeletal muscle longitudinal/transverse images.
+- `histo_nerveux` — 1: neural tube and neural crest source schematic.
+- `histo_fecondation` — 2: oocyte membrane zones and ovulation mechanism.
+- `histo_methodes` — 1: HES, Masson and MGG source images.
+- `histo_sanguin` — 1: hematopoietic differentiation tree.
+- `histo_semaine1` — 1: tubal migration and cleavage.
+- `histo_semaine2` — 1: early uteroplacental lacunar flow/villi.
+- `histo_semaine3` — 1: tertiary villi, free vs anchoring villi.
+
+Each item has a stable ID, exact original-source image path and page number, normalized crop coordinates, source image SHA-256, exam-focused recognition notes and is stored **separately** from `study_data.json`. The academic visual validator cross-checks original images against the real APK and the 76-course candidate, rejecting invented course IDs and unreviewed/fake source evidence. **17/17 passed structural, source-image hash and review-evidence checks**, `pending=0`. Earlier negative QA confirmed fake reviewed status is rejected. This certifies those specific figure references/notes, **not** full scientific completeness of their underlying courses.
+
+**Preservation:** The 76-course academic candidate, every existing question/card, course guide and original FC page, previous APK and on-phone study data are unchanged. Previous 3/7/12/16 board versions are preserved as private archives. **No full APK built, signed, installed or tested on the phone.**
+
+**Academic completeness is still NOT reached:** The 76 genuine courses have 1,787 page references, **423 without an indexed structured fact**, including serious deficits in Biochemistry, Cell Biology and Public Health; even an indexed page can be academically incomplete. Six provisional visual boards for the three SHS courses remain unapproved and not in the verified asset. New courses and teacher methods reported after November 8 were **not located in the recent PC input scan**; this does not establish absence on the phone or elsewhere. The question/card/QROC population, comprehensive source-page editorial pass and native adaptive learning are still open. Do not treat the 17 curated histology figures as full course completion.
