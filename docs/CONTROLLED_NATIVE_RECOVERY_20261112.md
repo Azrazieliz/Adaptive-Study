@@ -80,3 +80,21 @@ The owner confirmed that `histo_embryo`, `biocell_cytosq`, `biocell_mec_integrin
 **Updated structural gap report (not academic certification):** `PRESERVATION_20261112_NO_APK_BUILD\ACADEMIC_GAP_76_REAL_COURSES_20261112.json` measures current source-page fact-link coverage from the latest v3.36.9 dataset, excluding the fabricated records. It does not establish that any lesson covers every table, figure, exception or exam-important detail.
 
 **Important:** The native viewer and actual installed APK still contain historical content until a later fully verified release is built. No APK, user-data or original source has been updated by this candidate. Do not claim the removal has been installed.
+
+## Quantified 76-course source-index gaps after v3.36.9 academic changes
+
+Private report `PRESERVATION_20261112_NO_APK_BUILD\ACADEMIC_GAP_76_REAL_COURSES_20261112.json`: **1,787 original FC page references in 76 genuine chapters; 423 (23.7%) have zero linked course-guide facts**. This explicitly excludes the five fabricated records. Includes 12 SHS courses after the FC Actu 12 addition.
+
+| Subject | Course records | Page references without indexed facts |
+|:--|--:|--:|
+| SHS | 12 | 38 / 285 |
+| Histology | 12 | 32 / 330 |
+| Public health | 10 | 83 / 318 |
+| Cell biology | 12 | 132 / 297 |
+| Biochemistry | 10 | 91 / 325 |
+| Chemistry | 11 | 31 / 144 |
+| Physics | 9 | 16 / 88 |
+
+Highest current gaps by absolute count: `bio_biomol` (62/83), `biocell_noyau` (40/50), `biocell_endo` (31/34), `sp_facteurs_env` (28/30), `biocell_endocytose_exocytose` (26/33), `sp_produits_sante` (22/32), `histo_fecondation` (19/22), `biocell_mito_perox` (17/21). Empty text-index page may be a cover, illustration, title or genuine content deficit; original source must be visually read before altering or claiming completeness. A page with one or more indexed facts is **not** a certified complete FC page.
+
+This establishes the actual academic reconstruction priority before visual polish, major adaptive additions, or any new APK release.
