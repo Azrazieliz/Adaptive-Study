@@ -40,3 +40,13 @@ Branch: `work/controlled-recovery-incremental-20261112`, based on `fix/emergency
 7. Validate source coverage and native UI/revisions; only then consider a coherent APK. Existing **build freeze** remains respected. No build, signing, installation or user-data migration occurred here.
 
 **Implemented status:** PC snapshot complete; incremental gate and separate candidate creator implemented and proven on real data; academic and native release readiness NOT attained. No work is running in the background by virtue of this document.
+
+## Native source corrections staged after preservation (not built)
+
+The recovery branch also contains a narrow, source-only patch to `native-android/app/src/main/java/com/azrazieliz/adaptivestudy/MainActivity.java` (commit `99a7bcc3c5a638159dfaa87bf5b3e6a68edeaf70`):
+
+- SHS QROC displays its constraint from either legacy `lineLimit` or packaged `handwrittenLineLimit`. This fixes the proven v3.36.9 field mismatch without rewriting corrections.
+- The Home flashcard progress denominator and reviewed count now use **active approved card indexes** instead of all historical inactive records. Saved review keys are unchanged.
+- The native PDF cache key includes the installed application version, so a newly versioned APK no longer automatically reuses an obsolete previously cached original PDF. No deletion of user cache or study state.
+
+Exact source snippets were inspected after the change. **Not Gradle-compiled, built, installed, or phone-verified**; these are staged code changes only. Academic content, mode diagrams, mind maps and native adaptive engine remain untouched.
