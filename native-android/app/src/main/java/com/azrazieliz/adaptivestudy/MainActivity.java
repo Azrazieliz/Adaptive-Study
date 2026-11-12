@@ -331,7 +331,8 @@ public class MainActivity extends Activity {
             JSONArray sourcePages=arr(visual,"sourcePages");
             if(sourcePages==null||sourcePages.length()==0)continue;
             String layout=s(visual,"layout");
-            if(!"flow".equals(layout)&&!"comparison".equals(layout)&&!"cycle".equals(layout))
+            if(!"flow".equals(layout)&&!"comparison".equals(layout)&&
+               !"cycle".equals(layout)&&!"source_figure".equals(layout))
                 continue;
             LinearLayout section=panel(body);
             TextView tag=text("REPÈRE VISUEL • FC",12,GREEN,true);
@@ -339,7 +340,9 @@ public class MainActivity extends Activity {
             heading(section,s(visual,"title"));
             String subtitle=s(visual,"subtitle");
             if(!subtitle.isEmpty())add(section,text(subtitle,13,MUTED,false));
-            if("comparison".equals(layout)){
+            if("source_figure".equals(layout)){
+                if(!renderVerifiedFcFigure(section,visual))continue;
+            }else if("comparison".equals(layout)){
                 JSONArray columns=arr(visual,"columns");
                 if(columns==null||columns.length()!=2)continue;
                 LinearLayout across=horizontal();
@@ -394,6 +397,83 @@ public class MainActivity extends Activity {
             }
             sourcePageLinks(section,sourcePages);
         }
+    }
+
+
+    /** Original FC figures only: crop the approved teacher page in memory.
+     * Never generate a new drawing or make an OCR draft look verified.
+     */
+    private boolean renderVerifiedFcFigure(LinearLayout section, JSONObject visual){
+        int page=visual.optInt("sourcePage",0);
+        JSONArray registered=arr(mediaPages,currentChapter);
+        String path=s(visual,"sourceImage");
+        JSONObject evidence=visual.optJSONObject("reviewEvidence");
+        if(registered==null||page<1||page>registered.length()||
+           !path.equals(registered.optString(page-1))||evidence==null||
+           s(evidence,"sourceImageSha256").length()!=64)return false;
+        JSONArray reviewed=arr(evidence,"reviewedPageNumbers");
+        boolean pageReviewed=false;
+        if(reviewed!=null)for(int i=0;i<reviewed.length();i++)
+            if(reviewed.optInt(i)==page)pageReviewed=true;
+        if(!pageReviewed)return false;
+        JSONArray region=arr(visual,"crop");
+        if(region==null||region.length()!=4)return false;
+        final float left=(float)region.optDouble(0,-1),
+                    top=(float)region.optDouble(1,-1),
+                    right=(float)region.optDouble(2,-1),
+                    bottom=(float)region.optDouble(3,-1);
+        if(!(left>=0&&top>=0&&right<=1&&bottom<=1&&right-left>0.1&&bottom-top>0.06))
+            return false;
+        ZoomImageView figure=new ZoomImageView(this);
+        figure.setBackground(bg(PANEL2,Color.rgb(46,71,100),9));
+        int available=Math.max(dp(230),getResources().getDisplayMetrics().widthPixels-dp(70));
+        int scaledHeight=Math.round(available*(bottom-top)/(right-left));
+        LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,
+                                  Math.min(dp(440),Math.max(dp(190),scaledHeight)));
+        section.addView(figure,lp);
+        final String expected=path;
+        figure.setTag(expected);
+        new Thread(()->{
+            Bitmap original=null;
+            try(InputStream in=media(expected)){
+                BitmapFactory.Options opt=new BitmapFactory.Options();
+                opt.inJustDecodeBounds=true;
+                try(InputStream dims=media(expected)){BitmapFactory.decodeStream(dims,null,opt);}
+                int sample=1;
+                while(opt.outWidth/sample>2800||opt.outHeight/sample>3800)sample*=2;
+                opt.inSampleSize=sample;opt.inJustDecodeBounds=false;
+                original=BitmapFactory.decodeStream(in,null,opt);
+                if(original==null)throw new IOException("Missing original FC figure");
+                int x=Math.min(original.getWidth()-1,Math.max(0,Math.round(original.getWidth()*left))),
+                    y=Math.min(original.getHeight()-1,Math.max(0,Math.round(original.getHeight()*top))),
+                    w=Math.max(1,Math.min(original.getWidth()-x,
+                        Math.round(original.getWidth()*(right-left)))),
+                    h=Math.max(1,Math.min(original.getHeight()-y,
+                        Math.round(original.getHeight()*(bottom-top))));
+                Bitmap crop=Bitmap.createBitmap(original,x,y,w,h);
+                if(crop!=original)original.recycle();
+                runOnUiThread(()->{
+                    if(!expected.equals(figure.getTag())){crop.recycle();return;}
+                    figure.load(crop);
+                });
+            }catch(Exception error){
+                if(original!=null&&!original.isRecycled())original.recycle();
+                runOnUiThread(()->sub(section,"Schéma original indisponible : ouvrir la page source."));
+            }
+        },"NativeFcFigure").start();
+        JSONArray markers=arr(visual,"recognition");
+        if(markers!=null&&markers.length()>0){
+            LinearLayout legend=vertical();
+            legend.setVisibility(View.GONE);
+            for(int i=0;i<markers.length();i++){
+                JSONObject item=markers.optJSONObject(i);
+                if(item!=null)boardRow(legend,s(item,"label"),s(item,"value"),i%2==0,true,page);
+            }
+            add(section,button("Révéler les critères d’identification",false,()->
+                legend.setVisibility(legend.getVisibility()==View.GONE?View.VISIBLE:View.GONE)));
+            add(section,legend);
+        }
+        return true;
     }
 
     private JSONObject essentialSelection,completePageIndex;
