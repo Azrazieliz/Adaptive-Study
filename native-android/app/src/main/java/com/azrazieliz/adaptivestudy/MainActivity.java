@@ -2346,14 +2346,18 @@ public class MainActivity extends Activity {
         hint.setGravity(Gravity.CENTER);
         face.addView(hint,new LinearLayout.LayoutParams(-1,dp(35)));
         final boolean[] flipped={false};
+        LinearLayout sourceFigure=cardSourceFigure(card,chapter);
+        sourceFigure.setVisibility(View.GONE);
         face.setOnClickListener(v->{
             flipped[0]=!flipped[0];
             fact.setText(flipped[0]?a:q);
             fact.setTextSize(flipped[0]?20:21);
             fact.setTypeface(null,flipped[0]?0:1);
             hint.setText(flipped[0]?"Touchez pour revoir la question":"Touchez pour voir la reponse");
+            sourceFigure.setVisibility(flipped[0]?View.VISIBLE:View.GONE);
         });
         add(outer,face);
+        if(sourceFigure.getChildCount()>0)add(outer,sourceFigure);
         LinearLayout grades=vertical();
         String[] labs={"A revoir","Difficile","Bien","Facile"};
         int[] fills={Color.rgb(67,30,39),Color.rgb(68,53,32),Color.rgb(28,69,51),Color.rgb(145,176,255)};
@@ -2374,6 +2378,67 @@ public class MainActivity extends Activity {
         }
         add(outer,grades);
         sub(body,"Une question précise par carte. Évaluez votre rappel après avoir révélé la réponse.");
+    }
+
+    /** Histology recall: show the actual reviewed FC illustration only after reveal.
+     * Historical text-only cards are unchanged. Nothing is downloaded or generated.
+     */
+    private LinearLayout cardSourceFigure(JSONObject card,String chapter){
+        LinearLayout wrap=vertical();
+        String imagePath=s(card,"sourceImage");
+        JSONArray pages=arr(mediaPages,chapter);
+        int page=card.optInt("page",0);
+        JSONArray crop=arr(card,"sourceFigureCrop");
+        if(!s(card,"id").startsWith("source26:fig:") ||
+           !s(card,"studyCardStatus").startsWith("APPROVED_ORIGINAL_FC_FIGURE") ||
+           s(card,"sourceImageSha256").length()!=64 ||
+           pages==null || page<1 || page>pages.length() ||
+           !imagePath.equals(pages.optString(page-1)) ||
+           crop==null || crop.length()!=4)return wrap;
+        float x0=(float)crop.optDouble(0,-1),y0=(float)crop.optDouble(1,-1),
+              x1=(float)crop.optDouble(2,-1),y1=(float)crop.optDouble(3,-1);
+        if(!(x0>=0&&y0>=0&&x1<=1&&y1<=1&&x1-x0>0.1f&&y1-y0>0.06f))return wrap;
+        add(wrap,text("SCHÉMA ORIGINAL • FC p. "+page,12,GREEN,true));
+        ZoomImageView image=new ZoomImageView(this);
+        image.setBackground(bg(PANEL2,Color.rgb(49,72,103),10));
+        image.setTag(imagePath);
+        wrap.addView(image,new LinearLayout.LayoutParams(-1,dp(300)));
+        add(wrap,text("Agrandir directement avec deux doigts.",12,MUTED,false));
+        new Thread(()->{
+            Bitmap original=null;
+            try{
+                BitmapFactory.Options options=new BitmapFactory.Options();
+                options.inJustDecodeBounds=true;
+                try(InputStream scan=media(imagePath)){
+                    BitmapFactory.decodeStream(scan,null,options);
+                }
+                if(options.outWidth<1||options.outHeight<1)
+                    throw new IOException("Original FC size unavailable");
+                int sample=1;
+                while(options.outWidth/sample>2800||options.outHeight/sample>3800)sample*=2;
+                options.inJustDecodeBounds=false;options.inSampleSize=sample;
+                try(InputStream source=media(imagePath)){
+                    original=BitmapFactory.decodeStream(source,null,options);
+                }
+                if(original==null)throw new IOException("Original FC image unavailable");
+                int left=Math.min(original.getWidth()-1,Math.max(0,Math.round(original.getWidth()*x0))),
+                    top=Math.min(original.getHeight()-1,Math.max(0,Math.round(original.getHeight()*y0))),
+                    width=Math.max(1,Math.min(original.getWidth()-left,
+                           Math.round(original.getWidth()*(x1-x0)))),
+                    height=Math.max(1,Math.min(original.getHeight()-top,
+                            Math.round(original.getHeight()*(y1-y0))));
+                Bitmap cut=Bitmap.createBitmap(original,left,top,width,height);
+                if(cut!=original)original.recycle();
+                runOnUiThread(()->{
+                    if(!imagePath.equals(image.getTag())){cut.recycle();return;}
+                    image.load(cut);
+                });
+            }catch(Exception error){
+                if(original!=null&&!original.isRecycled())original.recycle();
+                runOnUiThread(()->sub(wrap,"Figure indisponible : consulter la page FC."));
+            }
+        },"StudyCardOriginalFc").start();
+        return wrap;
     }
     private void gradeCard(JSONObject c,int choice){
         String id=s(c,"id");int n=prefs.getInt("cr/"+id,0)+1;
