@@ -50,3 +50,21 @@ The recovery branch also contains a narrow, source-only patch to `native-android
 - The native PDF cache key includes the installed application version, so a newly versioned APK no longer automatically reuses an obsolete previously cached original PDF. No deletion of user cache or study state.
 
 Exact source snippets were inspected after the change. **Not Gradle-compiled, built, installed, or phone-verified**; these are staged code changes only. Academic content, mode diagrams, mind maps and native adaptive engine remain untouched.
+
+## 12 November — academic-first visual learning implementation (source-staged)
+
+**Phone evidence:** The owner-provided Android screenshots show `v3.36.9-etude` running as a native offline application and Asterion Control's listener/screen-sharing/input access active. This resolves previous uncertainty about the installed application *version shown in that screenshot*. It does not establish academic acceptance or a device-progress backup.
+
+**Native renderer:** `MainActivity.java` now optionally loads `academic_visuals_verified_20261112.json` (separate from `study_data.json`, so no curriculum regeneration), and can render FC-linked **flow**, **comparison** and **causal feedback** boards directly in Essentiel, Complet and Comprendre. Each visual links back to original FC page(s), and Comprendre adds only concise exam-useful deductions. No map viewer panel or second application/web view. Malformed optional visual assets are disabled and logged without crashing course loading. Code latest commit `e1eabbf4b7ed188b9d52b9a6290e225b7f10834f`.
+
+**Private provisional academic content:** `D:\AdaptiveStudyRecovery\PRIVATE_ACADEMIC_VISUALS_20261112\academic_visuals_provisional_20261112.json`, SHA-256 `c9dfe6260fbdfb8e94aec1e0d22d7af2f71891563a746a67c33f40e76c1baf4f`. Six original FC-linked visual annotations for the three existing SHS courses:
+- `shs_prelevement_transplantation`: living/deceased donation consent comparison (FC pp. 10, 13); graft/immune response/immunosuppression pathway (FC pp. 2, 7).
+- `shs_socio_iss`: social position to health inequality pathway (FC pp. 11, 13); obesity/social stigma feedback (FC pp. 18–19).
+- `shs_sante_environnement`: danger/exposure/risk process (FC pp. 7–8); epidemiology/toxicology comparison (FC pp. 9–10).
+All currently `FC_OCR_CROSSCHECKED_PENDING_IMAGE`: **NOT released and NOT marked academically reviewed**. Three original image-only PDFs were verified present within v3.36.9 (20, 28 and 21 pages); extracted PDF text was blank, so historical OCR was consulted only as preliminary source evidence. The PC screenshot of the displayed original page returned an all-black capture, therefore visual confirmation was NOT completed. No need to manufacture confidence from OCR.
+
+**QA:** `tools/validate_academic_visuals.py` committed and exercised on the actual private 81-record curriculum. Structural test **passed** (6 boards; 3 flows, 2 comparisons, 1 causal loop; all page references valid; 0 page-image-reviewed; release_approved=false). The Java activity, including earlier QROC/flashcard/PDF cache corrections and the new renderer, **compiled successfully with Android API 36.1 `javac -source/-target 17`**, exit 0, with only standard compiler warning about module path/deprecation. **No Gradle APK build, installation, or on-phone visual acceptance.**
+
+**Further visual formats identified, NOT yet implemented:** annotated original-course figures and compact decision trees for chemistry/physics/methods, each with source references. These should replace unnecessary prose only after rigorous source checks. Do not resurrect mind-map generation or increase Comprendre complexity beyond exam deductions.
+
+**Next academic gate:** visually compare each of the cited FC pages, sign individual board review evidence, then enable that board by setting `PAGE_IMAGE_REVIEWED` and preserving evidence. Subsequently complete remaining incomplete chapters and incorporate teacher methods without refreshing unrelated datasets. The exact new course inventory since Nov 8 is still unresolved.
