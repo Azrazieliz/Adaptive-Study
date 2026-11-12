@@ -68,3 +68,15 @@ All currently `FC_OCR_CROSSCHECKED_PENDING_IMAGE`: **NOT released and NOT marked
 **Further visual formats identified, NOT yet implemented:** annotated original-course figures and compact decision trees for chemistry/physics/methods, each with source references. These should replace unnecessary prose only after rigorous source checks. Do not resurrect mind-map generation or increase Comprendre complexity beyond exam deductions.
 
 **Next academic gate:** visually compare each of the cited FC pages, sign individual board review evidence, then enable that board by setting `PAGE_IMAGE_REVIEWED` and preserving evidence. Subsequently complete remaining incomplete chapters and incorporate teacher methods without refreshing unrelated datasets. The exact new course inventory since Nov 8 is still unresolved.
+
+## Academic correction candidate — five fabricated courses removed non-destructively
+
+The owner confirmed that `histo_embryo`, `biocell_cytosq`, `biocell_mec_integrine`, `biocell_dev` and `biocell_cycle` were invented during earlier assistant development, NOT five genuine missing FCs. `tools/quarantine_fabricated_courses.py` creates a separate 76-course curriculum from the **actual v3.36.9 APK's curriculum**, with source SHA guard and no source overwrite. It archives the five false chapters plus **16 associated question records, 456 associated flashcards, five guides, page registries, metadata, old map registrations and original-document mappings** in a separate private quarantine. No other reference to the false IDs remains in the new candidate. Neither the original v3.36.9 APK nor any other on-phone app data has been changed.
+
+**Candidate** `D:\AdaptiveStudyRecovery\PRESERVATION_20261112_NO_APK_BUILD\V3369_76_REAL_COURSES_CANDIDATE.json`, SHA-256 `aa81226ec76d5a28873cac80a95fc680651311a9b50ba36cb8e40ca95cbaa6a6`. **Archive** `FIVE_INVENTED_COURSES_QUARANTINE_PRIVATE.json`, SHA-256 `0fac0443fc772d0d35bc85ea05d21a264df84fb9531435095215503454058e1a`. The v3.36.9 original source checksum was verified unchanged.
+
+**Independent real-data comparison PASS:** The remaining 76 courses' `courseGuides`, `coursePages`, `courseMeta`, `mindMaps` and `courseSourceDocuments` entries are identical before/after. All unrelated question and flashcard records are identical. The six private academic visual drafts still pass structural validation against the cleaned 76-course candidate; **all six await original page-image review**.
+
+**Updated structural gap report (not academic certification):** `PRESERVATION_20261112_NO_APK_BUILD\ACADEMIC_GAP_76_REAL_COURSES_20261112.json` measures current source-page fact-link coverage from the latest v3.36.9 dataset, excluding the fabricated records. It does not establish that any lesson covers every table, figure, exception or exam-important detail.
+
+**Important:** The native viewer and actual installed APK still contain historical content until a later fully verified release is built. No APK, user-data or original source has been updated by this candidate. Do not claim the removal has been installed.
