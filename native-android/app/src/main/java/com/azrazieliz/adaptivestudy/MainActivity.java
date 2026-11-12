@@ -287,6 +287,9 @@ public class MainActivity extends Activity {
             academicVisualCourses=obj(source,"courses");
         }catch(FileNotFoundException absent){
             academicVisualCourses=null; // Existing installs remain compatible.
+        }catch(Exception invalid){
+            academicVisualCourses=null;
+            android.util.Log.e("AdaptiveStudyVisuals","Source visuals disabled: invalid asset",invalid);
         }
     }
     private int visualAccent(int index){
