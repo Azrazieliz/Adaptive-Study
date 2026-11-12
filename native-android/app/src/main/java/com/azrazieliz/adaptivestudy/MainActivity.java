@@ -711,7 +711,7 @@ public class MainActivity extends Activity {
         String kind=s(entry,"kind");
         if("short-answer".equals(kind)){
             heading(content,s(entry,"question"));
-            int limit=entry.optInt("lineLimit",0);
+            int limit=entry.optInt("lineLimit",entry.optInt("handwrittenLineLimit",0));
             if(limit>0)sub(content,"QROC • "+limit+" lignes manuscrites maximum");
             TextView answer=text(s(entry,"answer"),16,WHITE,false);
             answer.setTextIsSelectable(true);
@@ -965,12 +965,13 @@ public class MainActivity extends Activity {
         sub(body,chapters.size()+" cours • "+activeCards+" flashcards • "+(activeQuestions+shortAnswers)+" questions");
         int attempted=0,correct=0,reviewed=0;
         for(JSONObject q:questions){String id=s(q,"id");if(attempts(id)>0){attempted++;if(lastCorrect(id))correct++;}}
-        for(JSONObject c:cards)if(prefs.getInt("cr/"+s(c,"id"),0)>0)reviewed++;
+        for(ArrayList<Integer> active:cardsByChapter.values())for(int ix:active)
+            if(prefs.getInt("cr/"+s(cards.get(ix),"id"),0)>0)reviewed++;
         LinearLayout overview=panel(body);
         heading(overview,"Votre progression");
         info(overview,"Entraînement concours",activeQuestions+" QCM A–E • "+shortAnswers+" QROC SHS");
         if(attempted>0)sub(overview,attempted+" questions effectuées • "+correct+" intégralement correctes.");
-        info(overview,"Flashcards révisées",reviewed+" / "+cards.size());
+        info(overview,"Flashcards révisées",reviewed+" / "+activeCards);
         buttons(overview,"Questions concours",()->go("QUESTION_HOME"),"Réviser les cartes",()->go("CARD_PICK"));
         heading(body,"NOUVEL EXAMEN — TOUTES LES MATIÈRES");
         sub(body,"Priorité de mémorisation exhaustive : SHS, histologie–embryologie et biologie cellulaire. Toutes les autres matières et tous les cours restent au programme.");
@@ -1906,7 +1907,8 @@ public class MainActivity extends Activity {
         int requestedPage=pageIndex;
         new Thread(()->{
             try {
-                File target=new File(getCacheDir(),"course_"+chapter.replaceAll("[^a-zA-Z0-9]","")+".pdf");
+                File target=new File(getCacheDir(),"course_"+chapter.replaceAll("[^a-zA-Z0-9]","")+
+                    "_"+installedVersion().replaceAll("[^a-zA-Z0-9]","")+".pdf");
                 if(!target.exists()||target.length()==0)try(InputStream in=media(path);OutputStream out=new FileOutputStream(target)){
                     byte[] buf=new byte[32768];int n;while((n=in.read(buf))!=-1)out.write(buf,0,n);
                 }
