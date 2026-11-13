@@ -39,7 +39,7 @@ for c in current:
   if not (a/'www'/rel).is_file():missing.append((cid,rel))
 assert not missing,missing[:10]
 source_java=(P/'app/src/main/java/com/azrazieliz/adaptivestudy/MainActivity.java').read_text('utf-8')
-for marker in ['NATIVE_SOURCE_GROUNDED_VISUAL_STUDY_V33613','buildSingleGuideMindMap','showCurrentSourceVisualOverview','CURRENT_FC_SOURCE_PAGE_STUDY_20261113','ALL_COURSE_THREE_MODE_V1_20261113',
+for marker in ['QUESTIONS_ONLY_LEGACY_PRACTICE_ROUTING_V33613','NATIVE_SOURCE_GROUNDED_VISUAL_STUDY_V33613','buildSingleGuideMindMap','showCurrentSourceVisualOverview','CURRENT_FC_SOURCE_PAGE_STUDY_20261113','ALL_COURSE_THREE_MODE_V1_20261113',
     'lessonFocusPage','showFocusedPageStudy','showPageStudyChooser','needsManualReview']:
  assert marker in source_java,marker
 gradle=(P/'app/build.gradle').read_text('utf-8')
@@ -58,7 +58,7 @@ assert unsigned.is_file() and unsigned.stat().st_size>200000000
 sdk=pathlib.Path.home()/'AppData/Local/Android/Sdk/build-tools/35.0.1'
 signer=sdk/'apksigner.bat';key=pathlib.Path.home()/'.android/debug.keystore'
 assert signer.is_file() and key.is_file()
-target=R/'AdaptiveStudy-NATIVE-v3.36.12-EXISTING-COURSES-PREVIEW.apk'
+target=R/'AdaptiveStudy-NATIVE-v3.36.13-CURRENT-FC-VISUALS-PREVIEW.apk'
 if target.exists():raise RuntimeError('TARGET_ALREADY_EXISTS_DO_NOT_OVERWRITE')
 args=[str(signer),'sign','--ks',str(key),'--ks-key-alias','androiddebugkey',
       '--ks-pass','pass:android','--key-pass','pass:android','--out',str(target),str(unsigned)]
