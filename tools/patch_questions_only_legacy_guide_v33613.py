@@ -144,16 +144,6 @@ def patch(s):
    '            LinearLayout container=vertical();',
    "filter paragraph practice sections")
  s=one(s,
-   '        heading(body,"Cartes mentales — originales conservées");\n'
-   '        sub(body,"Images d'origine et branches conservées. Une carte structurée existante est utilisée uniquement lorsqu’aucune image originale n’est enregistrée.");',
-   '        heading(body,"Cartes conceptuelles — une par cours");\n'
-   '        sub(body,"Chaque carte interactive regroupe les sections existantes du cours. Les planches historiques restent archivées.");',
-   "correct one mindmap picker labels")
- s=one(s,
-   '        boolean active=screen.equals(dest)||((screen.equals("LESSON")',
-   '        boolean active=screen.equals(dest)||((screen.equals("LESSON")',
-   "no-op") if False else s
- s=one(s,
    '            showComprehension();\n'
    '            showCurrentSourceVisualOverview("UNDERSTAND");',
    '            showCurrentSourceVisualOverview("UNDERSTAND");\n'
