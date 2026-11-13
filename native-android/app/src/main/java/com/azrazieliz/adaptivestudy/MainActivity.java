@@ -1039,8 +1039,10 @@ public class MainActivity extends Activity {
             JSONObject source=obj(q,"source");
             JSONArray originalPages=arr(mediaPages,id);
             int originalPage=source==null?0:source.optInt("page",0);
-            boolean newSourceVerified=qid.startsWith("source26:") &&
-                    "APPROVED_SOURCE_IMAGE_REVIEW_20261112".equals(s(q,"studyQuestionStatus")) &&
+            String reviewStatus=s(q,"studyQuestionStatus");
+            boolean reviewedFcQuestion="APPROVED_SOURCE_IMAGE_REVIEW_20261112".equals(reviewStatus) ||
+                    "APPROVED_SOURCE_IMAGE_REVIEW_20261113".equals(reviewStatus);
+            boolean newSourceVerified=qid.startsWith("source26:") && reviewedFcQuestion &&
                     source!=null && "ORIGINAL_FC_IMAGE".equals(s(source,"kind")) &&
                     s(source,"sha256").length()==64 && originalPages!=null &&
                     originalPage>=1 && originalPage<=originalPages.length() &&
