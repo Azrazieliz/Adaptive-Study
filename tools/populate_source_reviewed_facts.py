@@ -18,11 +18,6 @@ from pathlib import Path
 from apply_incremental_study_patch import apply, FORMAT
 
 SCHEMA="FC_SOURCE_REVIEWED_POPULATION_V1"
-# Composite study bundles reuse other FCs. They are not independent owner-supplied courses.
-DERIVED_STUDY_BUNDLES={
-    "biocell_noyau","bio_proteines","bio_biomol",
-    "chim_atoliais","chim_protons","phys_energie_elec","phys_fluides",
-}
 
 def norm(value: str) -> str:
     return re.sub(r"\W+"," ",value.casefold()).strip()
@@ -54,8 +49,6 @@ def main() -> int:
             for cid,block in edited.items():
                 if cid not in actual_courses:
                     raise ValueError(f"{cid}: not an existing course ID")
-                if cid in DERIVED_STUDY_BUNDLES:
-                    raise ValueError(f"{cid}: derived multi-FC bundle, not an independent source FC; populate its original member courses")
                 page_list=base["coursePages"].get(cid)
                 if not page_list:raise ValueError(f"{cid}: no original pages")
                 oldguide=base["courseGuides"].get(cid)
