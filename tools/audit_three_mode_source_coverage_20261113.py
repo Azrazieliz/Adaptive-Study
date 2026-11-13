@@ -34,8 +34,8 @@ def main():
         verified=set()
         boards=visual_by_course.get(cid,[])
         for board in boards:
-            if board.get("reviewStatus")=="PAGE_IMAGE_REVIEWED" and
-                isinstance(board.get("reviewEvidence"),dict):
+            if (board.get("reviewStatus")=="PAGE_IMAGE_REVIEWED" and
+                isinstance(board.get("reviewEvidence"),dict)):
                 for n in board.get("sourcePages",[]):
                     if isinstance(n,int) and 0<n<=len(source):verified.add(n)
         guide=guides.get(cid,{})
