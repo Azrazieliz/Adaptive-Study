@@ -145,7 +145,7 @@ def patch(s):
    "filter paragraph practice sections")
  s=one(s,
    '        heading(body,"Cartes mentales — originales conservées");\n'
-   '        sub(body,"Images d’origine et branches conservées. Une carte structurée existante est utilisée uniquement lorsqu’aucune image originale n’est enregistrée.");',
+   '        sub(body,"Images d'origine et branches conservées. Une carte structurée existante est utilisée uniquement lorsqu’aucune image originale n’est enregistrée.");',
    '        heading(body,"Cartes conceptuelles — une par cours");\n'
    '        sub(body,"Chaque carte interactive regroupe les sections existantes du cours. Les planches historiques restent archivées.");',
    "correct one mindmap picker labels")
