@@ -32,10 +32,10 @@ s=once(s,
     '            guideMode="COMPLETE";go("LESSON");\n'
     '        }));')
 s=once(s,
-    '             add(body,button("Voir les autres notions indexées",false,()->{\n'
+    '            add(body,button("Voir les autres notions indexées",false,()->{\n'
     '                guideMode="FULL_FACTS";go("LESSON");\n'
     '            }));',
-    '             add(body,button("Voir Complet",false,()->{\n'
+    '            add(body,button("Voir Complet",false,()->{\n'
     '                guideMode="COMPLETE";go("LESSON");\n'
     '            }));')
 s=once(s,
