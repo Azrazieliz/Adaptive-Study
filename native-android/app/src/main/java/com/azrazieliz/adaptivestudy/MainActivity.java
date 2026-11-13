@@ -41,12 +41,8 @@ public class MainActivity extends Activity {
     private final LinkedHashMap<String,String> subjects=new LinkedHashMap<>();
     private final HashMap<String,JSONObject> byChapter=new HashMap<>();
     private final HashMap<String,ArrayList<Integer>> questionsByChapter=new HashMap<>(), cardsByChapter=new HashMap<>();
-    // Historical bogus entries and non-FC composite groupings are not courses.
-    // Keep user progress keyed by original IDs intact; hide only their catalog access.
     private static final Set<String> INACTIVE_COURSES=new HashSet<>(Arrays.asList(
-        "histo_embryo","biocell_cytosq","biocell_mec_integrine","biocell_dev","biocell_cycle",
-        "biocell_noyau","bio_proteines","bio_biomol",
-        "chim_atoliais","chim_protons","phys_energie_elec","phys_fluides"));
+        "histo_embryo","biocell_cytosq","biocell_mec_integrine","biocell_dev","biocell_cycle"));
     private boolean shsPractice;
     private JSONObject sourceRepairs;
     private String screen="HOME", currentChapter="", activeSubject="ALL", guideMode="ESSENTIAL";
