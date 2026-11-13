@@ -69,6 +69,7 @@ def main():
     if any(f.get('section')==si and f.get('item')==fi and f.get('originalChapter',cid)==cid for f in facts):
      continue
     original_page_review=data.get('sourceVerifiedLessonCoverage',{}).get(cid,{})
+    if not isinstance(original_page_review,dict):original_page_review={}
     verified_set=set(original_page_review.get('verifiedPages',[]))
     unreviewed_source=original_page_review.get('status')=='PARTIAL' and page not in verified_set
     fact={
@@ -106,7 +107,7 @@ def main():
   "academicCoverageCertifiedComplete":False,
   "notes":"This indexes existing facts and original assets for navigation, not new editorial certification. Automatic OCR is excluded."
  }
- report=pathlib.Path(args.assets).parent.parent.parent.parent/"PRESERVATION_20261112_NO_APK_BUILD"/"EXISTING_70_COURSE_NATIVE_SOURCE_INDEX_AUDIT_20261113.json"
+ report=pathlib.Path(args.assets).parent.parent.parent.parent.parent/"PRESERVATION_20261112_NO_APK_BUILD"/"EXISTING_70_COURSE_NATIVE_SOURCE_INDEX_AUDIT_20261113.json"
  report.parent.mkdir(parents=True,exist_ok=True)
  putjson(report,summary)
  print(json.dumps({k:v for k,v in summary.items() if k not in ("newIndexFactsByCourse","indexedPagesByCourse","sourceDataSha256Untouched")},ensure_ascii=True),flush=True)
