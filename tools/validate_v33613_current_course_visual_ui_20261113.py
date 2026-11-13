@@ -16,7 +16,7 @@ chapters=[c for c in data['chapters'] if c['id'] not in inactive]
 assert len(chapters)==70,(len(chapters),"expected 70 independent existing FCs")
 assert len(data['chapters'])==81 and len(set(x['id'] for x in data['chapters']))==81
 assert "versionCode 33613" in gradle and "3.36.13-visual-source" in gradle
-for anchor in ['NATIVE_SOURCE_GROUNDED_VISUAL_STUDY_V33613','showCurrentSourceVisualOverview("ESSENTIAL")',
+for anchor in ['QUESTIONS_ONLY_LEGACY_PRACTICE_ROUTING_V33613','openPracticeNotesPicker()','go("QUESTION_HOME")','NATIVE_SOURCE_GROUNDED_VISUAL_STUDY_V33613','showCurrentSourceVisualOverview("ESSENTIAL")',
     'showCurrentSourceVisualOverview("COMPLETE")','showCurrentSourceVisualOverview("UNDERSTAND")',
     'showFocusedSourceRelationBoard(facts,current)','buildSingleGuideMindMap()',
     'if(generated!=null)','final boolean[] detailLoaded={false}',
@@ -24,6 +24,8 @@ for anchor in ['NATIVE_SOURCE_GROUNDED_VISUAL_STUDY_V33613','showCurrentSourceVi
     'showReviewedNeuralMechanisms()','showSourceVerifiedVisualBoards("UNDERSTAND")',
     'showSourceVerifiedVisualBoards("COMPLETE")','showSourceVerifiedVisualBoards("ESSENTIAL")']:
  assert anchor in java,anchor
+assert 'row.addView(button("Pièges",false,()->go("PRACTICE_NOTES"))' not in java
+assert 'else if(screen.equals("PRACTICE_NOTES"))go("QUESTION_HOME")' in java
 assert java.count('showPreservedMapPlates(mind);')==0
 assert java.count('showPreservedMapPlates(original);')==0
 assert java.count('showReviewedNeuralMechanisms();')>=1
@@ -76,6 +78,7 @@ result={
  'coursesWithSourceComparisonCandidate':len(visual_sections),
  'sectionCountByCourse':dict(visual_sections),
  'sourceDataSha256':hashlib.sha256((a/'study_data.json').read_bytes()).hexdigest(),
+ 'questionsOnlyPracticeSeparation':True,
  'academicAllOriginalPagesComplete':False,
  'onDeviceAcceptanceVerified':False
 }
