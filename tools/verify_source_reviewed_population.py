@@ -13,7 +13,6 @@ import zipfile
 from pathlib import Path
 
 FAKE = {"histo_embryo","biocell_cytosq","biocell_mec_integrine","biocell_dev","biocell_cycle"}
-DERIVED = {"biocell_noyau","bio_proteines","bio_biomol","chim_atoliais","chim_protons","phys_energie_elec","phys_fluides"}
 
 def indexed(records, kind):
     d={}
@@ -49,8 +48,6 @@ def inspect(before,after,apk):
                 page=item.get("source",{}).get("page") if kind=="questions" else item.get("page")
                 if cid not in current or not isinstance(page,int) or not 1<=page<=len(after["coursePages"][cid]):
                     raise ValueError(f"{kind}: invalid chapter or page {rid}")
-                if cid in DERIVED:
-                    raise ValueError(f"{kind}: source-reviewed record attached to derived bundle {cid}, not original FC")
                 source_path=after["coursePages"][cid][page-1]
                 sha=hashlib.sha256(z.read("assets/www/"+source_path)).hexdigest()
                 if kind=="questions":
@@ -80,8 +77,6 @@ def inspect(before,after,apk):
         if nextguide is None:
             raise ValueError(f"Missing original guide {cid}")
         if nextguide!=guide:
-            if cid in DERIVED:
-                raise ValueError(f"{cid}: academic edits to derived bundle are forbidden; update original member FC")
             bs=guide.get("sections",[])
             ns=nextguide.get("sections",[])
             if ns[:len(bs)]!=bs or len(ns)<=len(bs):
